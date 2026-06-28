@@ -72,7 +72,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Ringkasan toko buku hari ini</p>
+          <p className="page-subtitle">Ringkasan Bunayya Putra hari ini</p>
         </div>
         <Link href="/orders/new" className="btn-primary hidden sm:inline-flex">
           <ShoppingCart className="w-4 h-4" />

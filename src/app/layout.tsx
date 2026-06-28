@@ -5,8 +5,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { MobileNav } from "@/components/MobileNav";
 
 export const metadata: Metadata = {
-  title: "PustakaPOS — Kasir Toko Buku",
-  description: "Aplikasi kasir modern untuk toko buku",
+  title: "Bunayya Putra — Kasir Toko Buku",
+  description: "Aplikasi kasir modern untuk Bunayya Putra",
 };
 
 export const viewport: Viewport = {

@@ -35,7 +35,7 @@ export function Sidebar() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-brand-900 tracking-tight leading-tight">
-              Pustaka<span className="text-brand-600">POS</span>
+              Bunayya<span className="text-brand-600">Putra</span>
             </h1>
             <p className="text-[11px] text-brand-400 font-medium">
               Kasir Toko Buku
@@ -80,7 +80,7 @@ export function Sidebar() {
       {/* Footer */}
       <div className="px-6 py-4 border-t border-brand-50">
         <p className="text-xs text-brand-400 font-medium">
-          &copy; {new Date().getFullYear()} PustakaPOS
+          &copy; {new Date().getFullYear()} Bunayya Putra
         </p>
       </div>
     </aside>
