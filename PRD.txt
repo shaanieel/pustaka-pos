@@ -1,0 +1,1769 @@
+# 📚 PustakaPOS — Aplikasi Kasir Toko Buku Modern
+
+Aplikasi kasir toko buku full-stack: mobile-first, responsif desktop, database Supabase, siap deploy ke Cloudflare Pages.
+
+---
+
+## 🗄️ 1. Database Schema (Jalankan di Supabase SQL Editor)
+
+```sql
+-- ============================================
+-- PUSTAKAPOS DATABASE SCHEMA
+-- ============================================
+
+-- Tabel Buku
+CREATE TABLE books (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  author TEXT NOT NULL,
+  isbn TEXT UNIQUE,
+  price NUMERIC NOT NULL CHECK (price >= 0),
+  stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  category TEXT,
+  publisher TEXT,
+  cover_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabel Pelanggan
+CREATE TABLE customers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT UNIQUE NOT NULL,
+  email TEXT,
+  notes TEXT,
+  total_orders INT DEFAULT 0,
+  total_spent NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabel Pesanan
+CREATE TABLE orders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name TEXT,
+  total_amount NUMERIC NOT NULL DEFAULT 0,
+  discount NUMERIC DEFAULT 0,
+  final_amount NUMERIC NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'completed' CHECK (status IN ('completed', 'pending', 'cancelled')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabel Item Pesanan
+CREATE TABLE order_items (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  order_id UUID REFERENCES orders(id) ON DELETE CASCADE NOT NULL,
+  book_id UUID REFERENCES books(id) ON DELETE SET NULL,
+  book_title TEXT NOT NULL,
+  quantity INT NOT NULL CHECK (quantity > 0),
+  price_at_time NUMERIC NOT NULL,
+  subtotal NUMERIC NOT NULL
+);
+
+-- Index untuk performa
+CREATE INDEX idx_books_title ON books(title);
+CREATE INDEX idx_books_category ON books(category);
+CREATE INDEX idx_customers_phone ON customers(phone);
+CREATE INDEX idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+
+-- Trigger update timestamp
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_books_timestamp BEFORE UPDATE ON books
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER update_customers_timestamp BEFORE UPDATE ON customers
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- Update customer stats setelah order
+CREATE OR REPLACE FUNCTION update_customer_stats()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE customers
+  SET total_orders = (SELECT COUNT(*) FROM orders WHERE customer_id = NEW.customer_id),
+      total_spent = (SELECT COALESCE(SUM(final_amount), 0) FROM orders WHERE customer_id = NEW.customer_id)
+  WHERE id = NEW.customer_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_customer_after_order AFTER INSERT OR UPDATE ON orders
+  FOR EACH ROW EXECUTE FUNCTION update_customer_stats();
+
+-- Kurangi stok buku setelah order item dibuat
+CREATE OR REPLACE FUNCTION decrease_book_stock()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE books SET stock = stock - NEW.quantity WHERE id = NEW.book_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER decrease_stock_after_order_item AFTER INSERT ON order_items
+  FOR EACH ROW EXECUTE FUNCTION decrease_book_stock();
+
+-- Enable RLS (Row Level Security)
+ALTER TABLE books ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies (allow all operations via anon key for internal POS)
+CREATE POLICY "Allow all books" ON books FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all customers" ON customers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all orders" ON orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all order_items" ON order_items FOR ALL USING (true) WITH CHECK (true);
+```
+
+---
+
+## 🛠️ 2. Struktur Project & File Konfigurasi
+
+### `package.json`
+
+```json
+{
+  "name": "pustaka-pos",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "preview": "npx @cloudflare/next-on-pages preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.441.0",
+    "next": "^14.2.14",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.4.1",
+    "tailwind-merge": "^2.5.2"
+  },
+  "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.2",
+    "@types/node": "^22.7.0",
+    "@types/react": "^18.3.8",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.12",
+    "typescript": "^5.6.2"
+  }
+}
+```
+
+### `next.config.mjs`
+
+```js
+import { setupDevPlatform } from '@cloudflare/next-on-pages/next-dev';
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+    ],
+  },
+};
+
+if (process.env.NODE_ENV === 'development') {
+  await setupDevPlatform();
+}
+
+export default nextConfig;
+```
+
+### `tailwind.config.ts`
+
+```ts
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50: "#ECFDF5",
+          100: "#D1FAE5",
+          200: "#A7F3D0",
+          300: "#6EE7B7",
+          400: "#34D399",
+          500: "#10B981",
+          600: "#059669",
+          700: "#047857",
+          800: "#065F46",
+          900: "#064E3B",
+          950: "#022C22",
+        },
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+        display: ["Inter", "system-ui", "sans-serif"],
+      },
+      borderRadius: {
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+      },
+      boxShadow: {
+        card: "0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
+        elevated:
+          "0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.04)",
+        float:
+          "0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.04)",
+      },
+    },
+  },
+  plugins: [],
+};
+export default config;
+```
+
+### `postcss.config.js`
+
+```js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+```
+
+### `tsconfig.json`
+
+```json
+{
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+```
+
+### `.env.local.example`
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+---
+
+## 🔌 3. Supabase Client & Types
+
+### `src/lib/supabase.ts`
+
+```ts
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+  },
+});
+
+// ── Helper: ambil data dengan error handling ──
+export async function fetchData<T>(
+  query: Promise<{ data: T | null; error: any }>
+): Promise<T> {
+  const { data, error } = await query;
+  if (error) throw error;
+  return data as T;
+}
+```
+
+### `src/types/index.ts`
+
+```ts
+export interface Book {
+  id: string;
+  title: string;
+  author: string;
+  isbn: string | null;
+  price: number;
+  stock: number;
+  category: string | null;
+  publisher: string | null;
+  cover_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  notes: string | null;
+  total_orders: number;
+  total_spent: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Order {
+  id: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  total_amount: number;
+  discount: number;
+  final_amount: number;
+  status: "completed" | "pending" | "cancelled";
+  notes: string | null;
+  created_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  book_id: string | null;
+  book_title: string;
+  quantity: number;
+  price_at_time: number;
+  subtotal: number;
+}
+
+export interface OrderWithItems extends Order {
+  items: OrderItem[];
+  customer?: Customer | null;
+}
+
+export interface CartItem {
+  book: Book;
+  quantity: number;
+}
+
+export interface DashboardStats {
+  totalBooks: number;
+  totalStock: number;
+  totalOrders: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  recentOrders: Order[];
+  lowStockBooks: Book[];
+}
+```
+
+---
+
+## 🎨 4. Global Styles & Layout
+
+### `src/app/globals.css`
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@layer base {
+  body {
+    @apply bg-brand-50/40 text-brand-950 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-brand-200 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-brand-300;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl border border-brand-100/60 shadow-card
+           transition-all duration-200;
+  }
+  .card:hover {
+    @apply shadow-elevated border-brand-200/60;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5
+           bg-brand-600 text-white font-semibold rounded-xl
+           hover:bg-brand-700 active:scale-[0.97]
+           transition-all duration-150 shadow-sm
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5
+           bg-white text-brand-700 font-semibold rounded-xl
+           border border-brand-200 hover:bg-brand-50 active:scale-[0.97]
+           transition-all duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5
+           text-brand-700 font-medium rounded-xl
+           hover:bg-brand-50 active:scale-[0.97]
+           transition-all duration-150;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5
+           bg-red-500 text-white font-semibold rounded-xl
+           hover:bg-red-600 active:scale-[0.97]
+           transition-all duration-150 shadow-sm;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 bg-white border border-brand-200 rounded-xl
+           text-brand-950 placeholder:text-brand-300
+           focus:outline-none focus:ring-2 focus:ring-brand-500/30
+           focus:border-brand-400 transition-all duration-200
+           text-[15px];
+  }
+
+  .label {
+    @apply block text-sm font-semibold text-brand-800 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .badge-success {
+    @apply badge bg-emerald-100 text-emerald-700;
+  }
+  .badge-warning {
+    @apply badge bg-amber-100 text-amber-700;
+  }
+  .badge-danger {
+    @apply badge bg-red-100 text-red-700;
+  }
+  .badge-neutral {
+    @apply badge bg-gray-100 text-gray-600;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-brand-950 tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-brand-500 mt-1;
+  }
+}
+
+/* Animasi */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out forwards;
+}
+```
+
+### `src/app/layout.tsx`
+
+```tsx
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
+import { Toaster } from "react-hot-toast";
+import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
+
+export const metadata: Metadata = {
+  title: "PustakaPOS — Kasir Toko Buku",
+  description: "Aplikasi kasir modern untuk toko buku",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#059669",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="id">
+      <body className="min-h-screen flex flex-col lg:flex-row">
+        {/* Sidebar — Desktop */}
+        <Sidebar />
+
+        {/* Konten Utama */}
+        <main className="flex-1 pb-24 lg:pb-8 lg:ml-64 min-h-screen">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {children}
+          </div>
+        </main>
+
+        {/* Bottom Navigation — Mobile */}
+        <MobileNav />
+
+        {/* Toast */}
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontSize: "14px",
+              fontWeight: 500,
+            },
+          }}
+        />
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## 🧩 5. Components
+
+### `src/components/Sidebar.tsx`
+
+```tsx
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  BookOpen,
+  ShoppingCart,
+  Users,
+  PlusCircle,
+  BookMarked,
+  ReceiptText,
+} from "lucide-react";
+import { clsx } from "clsx";
+
+const navItems = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/books", label: "Database Buku", icon: BookOpen },
+  { href: "/books/add", label: "Tambah Buku", icon: PlusCircle },
+  { href: "/orders", label: "Riwayat Pesanan", icon: ReceiptText },
+  { href: "/orders/new", label: "Pesanan Baru", icon: ShoppingCart },
+  { href: "/customers", label: "Pelanggan", icon: Users },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+
+  return (
+    <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-full w-64 bg-white border-r border-brand-100 z-40">
+      {/* Logo */}
+      <div className="px-6 pt-7 pb-6 border-b border-brand-50">
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-md shadow-brand-200 group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
+            <BookMarked className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-brand-900 tracking-tight leading-tight">
+              Pustaka<span className="text-brand-600">POS</span>
+            </h1>
+            <p className="text-[11px] text-brand-400 font-medium">
+              Kasir Toko Buku
+            </p>
+          </div>
+        </Link>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(item.href));
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={clsx(
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-all duration-200 group",
+                isActive
+                  ? "bg-brand-50 text-brand-700 shadow-sm"
+                  : "text-brand-600 hover:bg-brand-50/60 hover:text-brand-700"
+              )}
+            >
+              <item.icon
+                className={clsx(
+                  "w-5 h-5 transition-colors duration-200",
+                  isActive ? "text-brand-600" : "text-brand-400 group-hover:text-brand-500"
+                )}
+              />
+              {item.label}
+
+              {isActive && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-500" />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-brand-50">
+        <p className="text-xs text-brand-400 font-medium">
+          © {new Date().getFullYear()} PustakaPOS
+        </p>
+      </div>
+    </aside>
+  );
+}
+```
+
+### `src/components/MobileNav.tsx`
+
+```tsx
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  BookOpen,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
+import { clsx } from "clsx";
+
+const navItems = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/books", label: "Buku", icon: BookOpen },
+  { href: "/orders/new", label: "Pesanan", icon: ShoppingCart },
+  { href: "/customers", label: "Pelanggan", icon: Users },
+];
+
+export function MobileNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-brand-100 z-50 safe-area-bottom">
+      <div className="flex items-center justify-around px-1 py-2">
+        {navItems.map((item) => {
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(item.href));
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={clsx(
+                "flex flex-col items-center gap-1 py-1.5 px-3 rounded-2xl min-w-[64px] transition-all duration-200",
+                isActive
+                  ? "text-brand-700"
+                  : "text-brand-400 hover:text-brand-600"
+              )}
+            >
+              <div
+                className={clsx(
+                  "relative p-1.5 rounded-xl transition-all duration-200",
+                  isActive && "bg-brand-100"
+                )}
+              >
+                <item.icon
+                  className={clsx(
+                    "w-5 h-5 transition-all",
+                    isActive && "scale-110"
+                  )}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+              </div>
+              <span
+                className={clsx(
+                  "text-[11px] font-semibold transition-all",
+                  isActive ? "opacity-100" : "opacity-70"
+                )}
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+```
+
+### `src/components/StatsCard.tsx`
+
+```tsx
+import { clsx } from "clsx";
+import { LucideIcon } from "lucide-react";
+
+interface StatsCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: LucideIcon;
+  trend?: { value: string; positive: boolean };
+  variant?: "default" | "success" | "warning";
+}
+
+export function StatsCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
+  variant = "default",
+}: StatsCardProps) {
+  const iconBg = {
+    default: "bg-brand-100 text-brand-600",
+    success: "bg-emerald-100 text-emerald-600",
+    warning: "bg-amber-100 text-amber-600",
+  };
+
+  return (
+    <div className="card p-5 animate-fade-in-up">
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-brand-500">{title}</p>
+          <p className="text-2xl font-bold text-brand-950 tracking-tight">
+            {value}
+          </p>
+          {subtitle && (
+            <p className="text-xs text-brand-400">{subtitle}</p>
+          )}
+          {trend && (
+            <span
+              className={clsx(
+                "inline-flex items-center gap-1 text-xs font-semibold",
+                trend.positive ? "text-emerald-600" : "text-red-500"
+              )}
+            >
+              {trend.positive ? "↑" : "↓"} {trend.value}
+            </span>
+          )}
+        </div>
+        <div
+          className={clsx(
+            "w-11 h-11 rounded-xl flex items-center justify-center",
+            iconBg[variant]
+          )}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/components/BookCard.tsx`
+
+```tsx
+"use client";
+
+import { Book } from "@/types";
+import { BookOpen, Pencil, Trash2 } from "lucide-react";
+import { formatRupiah } from "@/lib/utils";
+import Link from "next/link";
+
+interface BookCardProps {
+  book: Book;
+  onDelete?: (id: string) => void;
+}
+
+export function BookCard({ book, onDelete }: BookCardProps) {
+  const isLowStock = book.stock <= 5 && book.stock > 0;
+  const isOutOfStock = book.stock === 0;
+
+  return (
+    <div className="card p-4 animate-fade-in-up group">
+      <div className="flex gap-4">
+        {/* Cover placeholder */}
+        <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {book.cover_url ? (
+            <img
+              src={book.cover_url}
+              alt={book.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <BookOpen className="w-7 h-7 text-brand-400" />
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-brand-950 truncate text-[15px]">
+            {book.title}
+          </h3>
+          <p className="text-sm text-brand-500 mt-0.5">{book.author}</p>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="text-sm font-bold text-brand-700">
+              {formatRupiah(book.price)}
+            </span>
+            {isLowStock && (
+              <span className="badge-warning">Stok: {book.stock}</span>
+            )}
+            {isOutOfStock && (
+              <span className="badge-danger">Habis</span>
+            )}
+            {!isLowStock && !isOutOfStock && (
+              <span className="badge-success">Stok: {book.stock}</span>
+            )}
+            {book.category && (
+              <span className="badge-neutral">{book.category}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <Link
+            href={`/books/${book.id}/edit`}
+            className="p-2 rounded-lg hover:bg-brand-50 text-brand-500 hover:text-brand-700 transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
+          </Link>
+          <button
+            onClick={() => onDelete?.(book.id)}
+            className="p-2 rounded-lg hover:bg-red-50 text-brand-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/components/SearchBar.tsx`
+
+```tsx
+"use client";
+
+import { Search, X } from "lucide-react";
+
+interface SearchBarProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
+export function SearchBar({
+  value,
+  onChange,
+  placeholder = "Cari...",
+}: SearchBarProps) {
+  return (
+    <div className="relative">
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="input-field pl-11 pr-10"
+      />
+      {value && (
+        <button
+          onClick={() => onChange("")}
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-brand-100 text-brand-400"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+### `src/components/ConfirmModal.tsx`
+
+```tsx
+"use client";
+
+import { AlertTriangle, X } from "lucide-react";
+import { useEffect } from "react";
+
+interface ConfirmModalProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  variant?: "danger" | "default";
+}
+
+export function ConfirmModal({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel = "Konfirmasi",
+  variant = "default",
+}: ConfirmModalProps) {
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative bg-white rounded-2xl shadow-float max-w-sm w-full p-6 animate-scale-in">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-brand-50 text-brand-400"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div
+          className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${
+            variant === "danger"
+              ? "bg-red-100 text-red-600"
+              : "bg-amber-100 text-amber-600"
+          }`}
+        >
+          <AlertTriangle className="w-5 h-5" />
+        </div>
+
+        <h3 className="text-lg font-bold text-brand-950 mb-1">{title}</h3>
+        <p className="text-sm text-brand-500 mb-6">{message}</p>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1">
+            Batal
+          </button>
+          <button
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className={
+              variant === "danger"
+                ? "btn-danger flex-1"
+                : "btn-primary flex-1"
+            }
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/lib/utils.ts`
+
+```ts
+export function formatRupiah(amount: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+export function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatDateShort(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export function cn(...classes: (string | undefined | false)[]): string {
+  return classes.filter(Boolean).join(" ");
+}
+```
+
+---
+
+## 📄 6. Halaman-Halaman
+
+### `src/app/page.tsx` — Dashboard
+
+```tsx
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { StatsCard } from "@/components/StatsCard";
+import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package } from "lucide-react";
+import { formatRupiah, formatDate } from "@/lib/utils";
+import { DashboardStats, Order, Book } from "@/types";
+import Link from "next/link";
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  async function loadStats() {
+    try {
+      const [
+        { count: totalBooks },
+        { data: books },
+        { count: totalOrders },
+        { data: orders },
+        { count: totalCustomers },
+      ] = await Promise.all([
+        supabase.from("books").select("*", { count: "exact", head: true }),
+        supabase.from("books").select("*"),
+        supabase.from("orders").select("*", { count: "exact", head: true }),
+        supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(10),
+        supabase.from("customers").select("*", { count: "exact", head: true }),
+      ]);
+
+      const allBooks = (books || []) as Book[];
+      const totalStock = allBooks.reduce((sum, b) => sum + b.stock, 0);
+      const totalRevenue = (orders || []).reduce((sum, o) => sum + (o.final_amount || 0), 0);
+      const lowStockBooks = allBooks.filter((b) => b.stock <= 5 && b.stock > 0);
+
+      setStats({
+        totalBooks: totalBooks || 0,
+        totalStock,
+        totalOrders: totalOrders || 0,
+        totalRevenue,
+        totalCustomers: totalCustomers || 0,
+        recentOrders: (orders || []) as Order[],
+        lowStockBooks,
+      });
+    } catch (err) {
+      console.error("Gagal memuat dashboard:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 bg-brand-100 rounded-lg animate-pulse" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="card p-5 h-28 animate-pulse bg-brand-50" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">Ringkasan toko buku hari ini</p>
+        </div>
+        <Link href="/orders/new" className="btn-primary hidden sm:inline-flex">
+          <ShoppingCart className="w-4 h-4" />
+          Pesanan Baru
+        </Link>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard
+          title="Total Buku"
+          value={stats!.totalBooks}
+          subtitle={`${stats!.totalStock} stok tersedia`}
+          icon={BookOpen}
+        />
+        <StatsCard
+          title="Total Pesanan"
+          value={stats!.totalOrders}
+          icon={ShoppingCart}
+          variant="success"
+        />
+        <StatsCard
+          title="Pendapatan"
+          value={formatRupiah(stats!.totalRevenue)}
+          icon={DollarSign}
+          variant="success"
+        />
+        <StatsCard
+          title="Pelanggan"
+          value={stats!.totalCustomers}
+          icon={Users}
+          variant="warning"
+        />
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Recent Orders */}
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-brand-950 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-brand-500" />
+              Pesanan Terbaru
+            </h2>
+            <Link
+              href="/orders"
+              className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Lihat Semua →
+            </Link>
+          </div>
+          {stats!.recentOrders.length === 0 ? (
+            <p className="text-sm text-brand-400 py-8 text-center">
+              Belum ada pesanan
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {stats!.recentOrders.slice(0, 5).map((order) => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-brand-50/60 transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-brand-900">
+                      {order.customer_name || "Pelanggan Umum"}
+                    </p>
+                    <p className="text-xs text-brand-400">
+                      {formatDate(order.created_at)}
+                    </p>
+                  </div>
+                  <span className="text-sm font-bold text-brand-700">
+                    {formatRupiah(order.final_amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Low Stock Alert */}
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-brand-950 flex items-center gap-2">
+              <Package className="w-4 h-4 text-amber-500" />
+              Stok Menipis
+            </h2>
+            <Link
+              href="/books"
+              className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Kelola Buku →
+            </Link>
+          </div>
+          {stats!.lowStockBooks.length === 0 ? (
+            <p className="text-sm text-brand-400 py-8 text-center">
+              Semua stok aman ✅
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {stats!.lowStockBooks.map((book) => (
+                <div
+                  key={book.id}
+                  className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-amber-50/60 transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-brand-900 truncate max-w-[180px]">
+                      {book.title}
+                    </p>
+                    <p className="text-xs text-brand-400">{book.author}</p>
+                  </div>
+                  <span className="badge-warning">
+                    {book.stock === 0 ? "Habis" : `Sisa ${book.stock}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/app/books/page.tsx` — Database Buku
+
+```tsx
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { Book } from "@/types";
+import { BookCard } from "@/components/BookCard";
+import { SearchBar } from "@/components/SearchBar";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { Plus, BookOpen, Filter } from "lucide-react";
+import Link from "next/link";
+import toast from "react-hot-toast";
+
+export default function BooksPage() {
+  const [books, setBooks] = useState<Book[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const loadBooks = useCallback(async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from("books")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (search) {
+        query = query.or(
+          `title.ilike.%${search}%,author.ilike.%${search}%,isbn.ilike.%${search}%`
+        );
+      }
+      if (categoryFilter) {
+        query = query.eq("category", categoryFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setBooks(data || []);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal memuat buku");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, categoryFilter]);
+
+  useEffect(() => {
+    loadBooks();
+  }, [loadBooks]);
+
+  async function handleDelete(id: string) {
+    try {
+      const { error } = await supabase.from("books").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Buku berhasil dihapus");
+      loadBooks();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menghapus buku");
+    }
+  }
+
+  // Ambil kategori unik
+  const categories = [...new Set(books.map((b) => b.category).filter(Boolean))];
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="page-title">Database Buku</h1>
+          <p className="page-subtitle">{books.length} buku terdaftar</p>
+        </div>
+        <Link href="/books/add" className="btn-primary">
+          <Plus className="w-4 h-4" />
+          Tambah Buku
+        </Link>
+      </div>
+
+      {/* Search & Filter */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex-1">
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Cari judul, penulis, atau ISBN..."
+          />
+        </div>
+        {categories.length > 0 && (
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="input-field sm:max-w-[180px]"
+          >
+            <option value="">Semua Kategori</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat!}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {/* Book List */}
+      {loading ? (
+        <div className="grid gap-3">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="card p-4 h-24 animate-pulse bg-brand-50/50"
+            />
+          ))}
+        </div>
+      ) : books.length === 0 ? (
+        <div className="card p-12 text-center">
+          <BookOpen className="w-12 h-12 text-brand-300 mx-auto mb-3" />
+          <p className="text-brand-500 font-medium">
+            {search || categoryFilter
+              ? "Tidak ada buku yang cocok"
+              : "Belum ada buku terdaftar"}
+          </p>
+          <Link href="/books/add" className="btn-primary mt-4 inline-flex">
+            Tambah Buku Pertama
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {books.map((book) => (
+            <BookCard
+              key={book.id}
+              book={book}
+              onDelete={(id) => setDeleteId(id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Confirm Delete */}
+      <ConfirmModal
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => deleteId && handleDelete(deleteId)}
+        title="Hapus Buku?"
+        message="Buku yang dihapus tidak bisa dikembalikan. Pastikan tidak ada pesanan yang terkait."
+        confirmLabel="Hapus"
+        variant="danger"
+      />
+    </div>
+  );
+}
+```
+
+### `src/app/books/add/page.tsx` — Tambah Buku
+
+```tsx
+"use client";
+
+import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Save, BookOpen } from "lucide-react";
+import Link from "next/link";
+import toast from "react-hot-toast";
+
+export default function AddBookPage() {
+  const router = useRouter();
+  const [form, setForm] = useState({
+    title: "",
+    author: "",
+    isbn: "",
+    price: "",
+    stock: "",
+    category: "",
+    publisher: "",
+    cover_url: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  function updateField(field: string, value: string) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!form.title || !form.author || !form.price) {
+      toast.error("Judul, penulis, dan harga wajib diisi");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("books").insert({
+        title: form.title.trim(),
+        author: form.author.trim(),
+        isbn: form.isbn.trim() || null,
+        price: parseFloat(form.price),
+        stock: parseInt(form.stock) || 0,
+        category: form.category.trim() || null,
+        publisher: form.publisher.trim() || null,
+        cover_url: form.cover_url.trim() || null,
+      });
+
+      if (error) throw error;
+
+      toast.success("Buku berhasil ditambahkan!");
+      router.push("/books");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menambahkan buku");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="max-w-lg mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Link href="/books" className="btn-ghost p-2 -ml-2">
+          <ArrowLeft className="w-5 h-5" />
+        </Link>
+        <div>
+          <h1 className="page-title">Tambah Buku</h1>
+          <p className="page-subtitle">Daftarkan buku baru ke database</p>
+        </div>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="card p-6 space-y-5">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className="label">Judul Buku *</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Contoh: Laut Bercerita"
+              value={form.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="label">Penulis *</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Contoh: Leila S. Chudori"
+              value={form.author}
+              onChange={(e) => updateField("author", e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="label">ISBN</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="978-xxx-xxx-xxxx"
+              value={form.isbn}
+              onChange={(e) => updateField("isbn", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="label">Harga (Rp) *</label>
+            <input
+              type="number"
+              className="input-field"
+              placeholder="75000"
+              min="0"
+              value={form.price}
+              onChange={(e) => updateField("price", e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="label">Stok</label>
+            <input
+              type="number"
+              className="input-field"
+              placeholder="10"
+              min="0"
+              value={form.stock}
+              onChange={(e) => updateField("stock", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="label">Kategori</label>
+            <select
+              className="input-field"
+              value={form.category}
+              onChange={(e) => updateField("category", e.target.value)}
+            >
+              <option value="">Pilih Kategori</option>
+              <option value="Fiksi">Fiksi</option>
+              <option value="Non-Fiksi">Non-Fiksi</option>
+              <option value="Pendidikan">Pendidikan</option>
+              <option value="Anak">Anak</option>
+              <option value="Komik">Komik</option>
+              <option value="Referensi">Referensi</option>
+              <option value="Agama">Agama</option>
+              <option value="Lainnya">Lainnya</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Penerbit</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Contoh: Gramedia"
+              value={form.publisher}
+              onChange={(e) => updateField("publisher", e.target.value)}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="label">URL Cover (opsional)</label>
+            <input
+              type="url"
+              className="input-field"
+              placeholder="https://..."
+              value={form.cover_url}
+              onChange={(e) => updateField("cover_url", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Link href="/books" className="btn-secondary flex-1">
+            Batal
+          </Link>
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary flex-1"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? "Menyimpan..." : "Simpan Buku"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+```
+
+### `src/app/books/[id]/edit/page.tsx` — Edit Buku
+
+```tsx
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter, useParams } from "next/navigation";
+import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import Link from "next/link";
+import toast from "react-hot-toast";
+import { ConfirmModal } from "@/components/ConfirmModal";
+
+export default function EditBookPage() {
+  const router = useRouter();
+  const params = useParams();
+  const bookId = params.id as string;
+
+  const [form, setForm] = useState({
+    title: "",
+    author: "",
+    isbn: "",
+    price: "",
+    stock: "",
+    category: "",
+    publisher: "",
+    cover_url: "",
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+
+  useEffect(() => {
+    loadBook();
+  }, [bookId]);
+
+  async function loadBook() {
+    try {
+      const { data, error } = await supabase
+        .from("books")
+        .select("*")
+        .eq("id", bookId)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setForm({
+          title: data.title || "",
+          author: data.author || "",
+          isbn: data.isbn || "",
+          price: String(data.price || ""),
+          stock: String(data.stock || ""),
+          category: data.category || "",
+          publisher: data.publisher || "",
+          cover_url: data.cover_url || "",
+        });
+      }
+    } catch (err: any) {
+      toast.error("Buku tidak ditemukan");
+      router.push("/books");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateField(field: string, value: string) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from("books")
+        .update({
+          title: form.title.trim(),
+          author: form.author.trim(),
+          isbn: form.isbn.trim() || null,
+          price: parseFloat(form.price),
+          stock: parseInt(form.stock) || 0,
+          category: form.category.trim() || null,
+          publisher: form.publisher.trim() || null,
+          cover_url: form.cover_url.trim() || null,
+        })
+        .eq("id", bookId);
+
+      if (error) throw error;
+      toast.success("Buku berhasil diperbarui!");
+      router.push("/books");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      const { error } = await supabase.from("books").delete().eq("id", bookId);
+      if (error) throw error;
+      toast.success("Buku dihapus");
+      router.push("/books");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <div className="card p-6 h-96 animate-pulse bg-brand-50/50" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-lg mx-auto space-y-5">
+      <div className="flex items-center gap-3">
+        <Link href="/books" className="btn-ghost p-2 -ml-2">
+          <ArrowLeft className="w-5 h-5" />
+        </Link>
+        <div className="flex-1">
+          <h1 className="page-title">Edit Buku</h1>
+          <p className="page-subtitle">Perbarui informasi buku</p>
+        </div>
+        <button
+          onClick={() => setShowDelete(true)}
+          className="btn-ghost text-red-500 hover:bg-red-50"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="card p-6 space-y-5">
+        {/* ... same fields
