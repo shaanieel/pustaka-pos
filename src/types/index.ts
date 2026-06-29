@@ -3,6 +3,7 @@ export interface Book {
   title: string;
   author: string;
   isbn: string | null;
+  book_code: string | null;
   price: number;
   stock: number;
   category: string | null;

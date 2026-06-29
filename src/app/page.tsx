@@ -5,7 +5,7 @@ export const runtime = "edge";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { StatsCard } from "@/components/StatsCard";
-import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package } from "lucide-react";
+import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package, PackageOpen, PlusCircle } from "lucide-react";
 import { formatRupiah, formatDate } from "@/lib/utils";
 import { DashboardStats, Order, Book } from "@/types";
 import Link from "next/link";
@@ -86,6 +86,43 @@ export default function DashboardPage() {
         <StatsCard title="Total Pesanan" value={stats!.totalOrders} icon={ShoppingCart} variant="success" />
         <StatsCard title="Pendapatan" value={formatRupiah(stats!.totalRevenue)} icon={DollarSign} variant="success" />
         <StatsCard title="Pelanggan" value={stats!.totalCustomers} icon={Users} variant="warning" />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-3 gap-3">
+        <Link
+          href="/orders/new"
+          className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-brand-100 flex items-center justify-center">
+            <ShoppingCart className="w-5 h-5 text-brand-600" />
+          </div>
+          <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
+            Pesanan Baru
+          </span>
+        </Link>
+        <Link
+          href="/stock/in"
+          className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center">
+            <PackageOpen className="w-5 h-5 text-amber-600" />
+          </div>
+          <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
+            Stok Masuk
+          </span>
+        </Link>
+        <Link
+          href="/books/add"
+          className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-green-100 flex items-center justify-center">
+            <PlusCircle className="w-5 h-5 text-green-600" />
+          </div>
+          <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
+            Tambah Buku
+          </span>
+        </Link>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

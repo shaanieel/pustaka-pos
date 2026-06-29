@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Book, Customer, CartItem, Order, OrderItem } from "@/types";
 import { SearchBar } from "@/components/SearchBar";
+import { CategoryPicker } from "@/components/CategoryPicker";
 import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
 import { formatRupiah } from "@/lib/utils";
@@ -40,6 +41,14 @@ export default function NewOrderPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [showAllCustomers, setShowAllCustomers] = useState(false);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+
+  // New customer form
+  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "" });
+
+  // Category filter
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   // Discount
   const [discount, setDiscount] = useState(0);
@@ -119,28 +128,55 @@ export default function NewOrderPage() {
 
   // Search books
   const searchBooks = useCallback(async () => {
-    if (!bookSearch.trim()) {
+    const hasSearch = bookSearch.trim().length > 0;
+    const hasCategory = selectedCategory.trim().length > 0;
+    if (!hasSearch && !hasCategory) {
       setBooks([]);
       return;
     }
     try {
-      const { data } = await supabase
-        .from("books")
-        .select("*")
-        .or(`title.ilike.%${bookSearch}%,author.ilike.%${bookSearch}%,isbn.ilike.%${bookSearch}%`)
-        .limit(10);
+      let query = supabase.from("books").select("*");
+      if (hasSearch) {
+        query = query.or(`title.ilike.%${bookSearch}%,author.ilike.%${bookSearch}%,isbn.ilike.%${bookSearch}%`);
+      }
+      if (hasCategory) {
+        query = query.eq("category", selectedCategory);
+      }
+      const { data } = await query.limit(10);
       setBooks(data || []);
     } catch {
       // silent
     }
-  }, [bookSearch]);
+  }, [bookSearch, selectedCategory]);
 
   useEffect(() => {
     const timer = setTimeout(searchBooks, 300);
     return () => clearTimeout(timer);
   }, [searchBooks]);
 
-  // Search customers
+  // Fetch all customers (on click)
+  const fetchAllCustomers = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from("customers")
+        .select("*")
+        .order("name");
+      setAllCustomers(data || []);
+    } catch {
+      // silent
+    }
+    setShowAllCustomers(true);
+    setShowCustomerSearch(false);
+  }, []);
+
+  // Filter all customers by search locally
+  const filteredAllCustomers = customerSearch.trim()
+    ? allCustomers.filter(
+        (c) =>
+          c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+          (c.phone && c.phone.includes(customerSearch))
+      )
+    : allCustomers;
   const searchCustomers = useCallback(async () => {
     if (!customerSearch.trim()) {
       setCustomers([]);
@@ -232,12 +268,30 @@ export default function NewOrderPage() {
 
     setSaving(true);
     try {
+      // 0. Auto-create new customer if form is filled
+      let customerId = selectedCustomer?.id || null;
+      let customerName = selectedCustomer?.name || null;
+      if (newCustomer.name.trim()) {
+        const { data: newCust, error: custError } = await supabase
+          .from("customers")
+          .insert({
+            name: newCustomer.name.trim(),
+            phone: newCustomer.phone.trim() || null,
+            email: newCustomer.email.trim() || null,
+          })
+          .select()
+          .single();
+        if (custError) throw custError;
+        customerId = newCust.id;
+        customerName = newCust.name;
+      }
+
       // 1. Create order
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
-          customer_id: selectedCustomer?.id || null,
-          customer_name: selectedCustomer?.name || null,
+          customer_id: customerId,
+          customer_name: customerName,
           total_amount: subtotal,
           discount,
           final_amount: finalAmount,
@@ -301,6 +355,10 @@ export default function NewOrderPage() {
     setSelectedCustomer(null);
     setDiscount(0);
     setPaymentAmount(0);
+    setNewCustomer({ name: "", phone: "", email: "" });
+    setShowAllCustomers(false);
+    setCustomerSearch("");
+    setSelectedCategory("");
   }
 
   // If receipt is showing
@@ -338,6 +396,14 @@ export default function NewOrderPage() {
             {/* Book Search */}
             <div className="card p-4 space-y-3">
               <label className="label">Cari Buku</label>
+              <CategoryPicker
+                value={selectedCategory}
+                onChange={(cat) => {
+                  setSelectedCategory(cat);
+                  setBookSearch("");
+                }}
+                compact
+              />
               <div className="flex gap-2">
                 <div className="flex-1">
                   <SearchBar
@@ -437,7 +503,12 @@ export default function NewOrderPage() {
                 </h3>
                 <button
                   onClick={() => {
-                    setShowCustomerSearch(!showCustomerSearch);
+                    if (showAllCustomers) {
+                      setShowAllCustomers(false);
+                      setCustomerSearch("");
+                    } else {
+                      fetchAllCustomers();
+                    }
                     setSelectedCustomer(null);
                   }}
                   className="text-xs font-semibold text-brand-600 hover:text-brand-700"
@@ -448,40 +519,86 @@ export default function NewOrderPage() {
 
               {selectedCustomer ? (
                 <div className="bg-brand-50 rounded-xl p-3">
-                  <p className="font-semibold text-brand-950 text-sm">{selectedCustomer.name}</p>
-                  <p className="text-xs text-brand-500">{selectedCustomer.phone}</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-brand-950 text-sm">{selectedCustomer.name}</p>
+                      <p className="text-xs text-brand-500">{selectedCustomer.phone}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedCustomer(null);
+                        setShowAllCustomers(false);
+                        setCustomerSearch("");
+                      }}
+                      className="text-xs text-red-400 hover:text-red-500"
+                    >
+                      Hapus
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-brand-400">Pelanggan Umum</p>
               )}
 
-              {showCustomerSearch && (
+              {/* All customers dropdown */}
+              {showAllCustomers && (
                 <div className="space-y-2">
                   <SearchBar
                     value={customerSearch}
                     onChange={setCustomerSearch}
                     placeholder="Cari nama atau telepon..."
                   />
-                  {customers.length > 0 && (
-                    <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-40 overflow-y-auto">
-                      {customers.map((c) => (
+                  <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-60 overflow-y-auto">
+                    {filteredAllCustomers.length === 0 ? (
+                      <p className="p-3 text-sm text-brand-400 text-center">Pelanggan tidak ditemukan</p>
+                    ) : (
+                      filteredAllCustomers.map((c) => (
                         <button
                           key={c.id}
                           onClick={() => {
                             setSelectedCustomer(c);
-                            setShowCustomerSearch(false);
+                            setShowAllCustomers(false);
                             setCustomerSearch("");
+                            setNewCustomer({ name: "", phone: "", email: "" });
                           }}
                           className="w-full p-3 text-left hover:bg-brand-50/60 transition-colors"
                         >
                           <p className="font-semibold text-brand-950 text-sm">{c.name}</p>
                           <p className="text-xs text-brand-500">{c.phone}</p>
                         </button>
-                      ))}
-                    </div>
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
+
+              {/* New customer form */}
+              <div className="border-t border-brand-100 pt-3 mt-2">
+                <p className="text-xs font-semibold text-brand-500 mb-2">Pelanggan Baru</p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nama *"
+                    className="input-field text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={newCustomer.phone}
+                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                    placeholder="No. WA/HP"
+                    className="input-field text-sm"
+                  />
+                  <input
+                    type="email"
+                    value={newCustomer.email}
+                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, email: e.target.value }))}
+                    placeholder="Email"
+                    className="input-field text-sm"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Summary */}

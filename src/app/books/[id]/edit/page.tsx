@@ -6,12 +6,14 @@ export const runtime = "edge";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Save, Trash2, ScanLine } from "lucide-react";
+import { ArrowLeft, Save, Trash2, ScanLine, Download } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
+import { CategoryPicker } from "@/components/CategoryPicker";
+import { QRCodeSVG } from "qrcode.react";
 import { deleteCoverFromR2 } from "@/lib/compress";
 
 export default function EditBookPage() {
@@ -21,7 +23,7 @@ export default function EditBookPage() {
 
   const [form, setForm] = useState({
     title: "", author: "", isbn: "", price: "", stock: "",
-    category: "", publisher: "", cover_url: "", year: "",
+    category: "", publisher: "", cover_url: "", year: "", book_code: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,6 +50,7 @@ export default function EditBookPage() {
           publisher: data.publisher || "",
           cover_url: data.cover_url || "",
           year: data.year ? String(data.year) : "",
+          book_code: data.book_code || "",
         });
       }
     } catch (err: any) {
@@ -128,6 +131,7 @@ export default function EditBookPage() {
           publisher: form.publisher.trim() || null,
           cover_url: form.cover_url.trim() || null,
           year: form.year ? parseInt(form.year) : null,
+          book_code: form.book_code.trim() || null,
         })
         .eq("id", bookId);
       if (error) throw error;
@@ -224,15 +228,12 @@ export default function EditBookPage() {
               onChange={(e) => updateField("stock", e.target.value)} />
           </div>
           <div>
-            <label className="label">Kategori</label>
-            <select className="input-field" value={form.category}
-              onChange={(e) => updateField("category", e.target.value)}>
-              <option value="">Pilih Kategori</option>
-              <option value="Fiksi">Fiksi</option><option value="Non-Fiksi">Non-Fiksi</option>
-              <option value="Pendidikan">Pendidikan</option><option value="Anak">Anak</option>
-              <option value="Komik">Komik</option><option value="Referensi">Referensi</option>
-              <option value="Agama">Agama</option><option value="Lainnya">Lainnya</option>
-            </select>
+            <label className="label">Kode Buku</label>
+            <input type="text" className="input-field" placeholder="BP-001" value={form.book_code}
+              onChange={(e) => updateField("book_code", e.target.value)} />
+          </div>
+          <div>
+            <CategoryPicker value={form.category} onChange={(v) => updateField("category", v)} />
           </div>
           <div>
             <label className="label">Penerbit</label>
@@ -248,6 +249,49 @@ export default function EditBookPage() {
           </button>
         </div>
       </form>
+
+      {/* QR Code Section */}
+      <div className="card p-6 space-y-4">
+        <div>
+          <h2 className="font-semibold text-brand-800">QR Code Buku</h2>
+          <p className="text-xs text-brand-400 mt-1">Scan untuk akses cepat buku ini</p>
+        </div>
+        <div className="flex flex-col items-center gap-4">
+          <div id="book-qr-code" className="bg-white p-4 rounded-xl border border-brand-200 inline-block">
+            <QRCodeSVG
+              value={form.book_code || bookId}
+              size={200}
+              level="M"
+              includeMargin
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const svgEl = document.querySelector("#book-qr-code svg");
+              if (!svgEl) return;
+              const svgData = new XMLSerializer().serializeToString(svgEl);
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              const img = new Image();
+              img.onload = () => {
+                canvas.width = 200;
+                canvas.height = 200;
+                ctx?.drawImage(img, 0, 0);
+                const link = document.createElement("a");
+                link.download = `${form.book_code || "buku"}-qrcode.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+              };
+              img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+            }}
+            className="btn-secondary text-sm flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Download PNG
+          </button>
+        </div>
+      </div>
 
       <ConfirmModal
         open={showDelete}

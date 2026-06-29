@@ -9,6 +9,7 @@ import { BookSearchResult } from "@/types";
 import { BookSearchCard } from "@/components/BookSearchCard";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
+import { CategoryPicker } from "@/components/CategoryPicker";
 import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -30,7 +31,7 @@ export default function AddBookPage() {
   // Manual form state
   const [form, setForm] = useState({
     title: "", author: "", isbn: "", price: "", stock: "10",
-    category: "", publisher: "", cover_url: "", year: "",
+    category: "", publisher: "", cover_url: "", year: "", book_code: "",
   });
   const [saving, setSaving] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -91,6 +92,7 @@ export default function AddBookPage() {
           publisher: result.publisher || "",
           cover_url: r2CoverUrl,
           year: result.year?.toString() || "",
+          book_code: "",
         });
       } else {
         // ISBN TIDAK ketemu → ISBN tetap terisi, user isi manual
@@ -183,6 +185,7 @@ export default function AddBookPage() {
       publisher: result.publisher || "",
       cover_url: r2CoverUrl,
       year: result.year?.toString() || "",
+      book_code: "",
     });
 
     setTimeout(() => {
@@ -211,6 +214,7 @@ export default function AddBookPage() {
         publisher: form.publisher.trim() || null,
         cover_url: form.cover_url.trim() || null,
         year: form.year ? parseInt(form.year) : null,
+        book_code: form.book_code.trim() || null,
       });
       if (error) throw error;
       toast.success("Buku berhasil ditambahkan!");
@@ -227,7 +231,7 @@ export default function AddBookPage() {
   }
 
   function clearForm() {
-    setForm({ title: "", author: "", isbn: "", price: "", stock: "10", category: "", publisher: "", cover_url: "", year: "" });
+    setForm({ title: "", author: "", isbn: "", price: "", stock: "10", category: "", publisher: "", cover_url: "", year: "", book_code: "" });
   }
 
   return (
@@ -352,19 +356,12 @@ export default function AddBookPage() {
                 value={form.stock} onChange={(e) => updateField("stock", e.target.value)} />
             </div>
             <div>
-              <label className="label">Kategori</label>
-              <select className="input-field" value={form.category}
-                onChange={(e) => updateField("category", e.target.value)}>
-                <option value="">Pilih Kategori</option>
-                <option value="Fiksi">Fiksi</option>
-                <option value="Non-Fiksi">Non-Fiksi</option>
-                <option value="Pendidikan">Pendidikan</option>
-                <option value="Anak">Anak</option>
-                <option value="Komik">Komik</option>
-                <option value="Referensi">Referensi</option>
-                <option value="Agama">Agama</option>
-                <option value="Lainnya">Lainnya</option>
-              </select>
+              <label className="label">Kode Buku</label>
+              <input type="text" className="input-field" placeholder="BP-001"
+                value={form.book_code} onChange={(e) => updateField("book_code", e.target.value)} />
+            </div>
+            <div>
+              <CategoryPicker value={form.category} onChange={(v) => updateField("category", v)} />
             </div>
           </div>
 
