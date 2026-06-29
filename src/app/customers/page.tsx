@@ -8,7 +8,7 @@ import { Customer } from "@/types";
 import { SearchBar } from "@/components/SearchBar";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { formatRupiah, formatDateShort } from "@/lib/utils";
-import { Plus, Users, Phone, Mail, Trash2 } from "lucide-react";
+import { Plus, Users, Phone, Mail, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
@@ -110,12 +110,19 @@ export default function CustomersPage() {
                     <p className="text-xs text-brand-400">{c.total_orders} pesanan</p>
                     <p className="text-sm font-bold text-brand-700">{formatRupiah(c.total_spent)}</p>
                   </div>
-                  <button
-                    onClick={() => setDeleteId(c.id)}
-                    className="p-2 rounded-lg hover:bg-red-50 text-brand-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">                    <Link
+                      href={`/customers/${c.id}/edit`}
+                      className="p-2 rounded-lg hover:bg-brand-50 text-brand-400 hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Link>
+                    <button
+                      onClick={() => setDeleteId(c.id)}
+                      className="p-2 rounded-lg hover:bg-red-50 text-brand-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
