@@ -8,6 +8,7 @@ export interface Book {
   category: string | null;
   publisher: string | null;
   cover_url: string | null;
+  year: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,4 +65,16 @@ export interface DashboardStats {
   totalCustomers: number;
   recentOrders: Order[];
   lowStockBooks: Book[];
+}
+
+// API search response
+export interface BookSearchResult {
+  id: string; // unique key for selection
+  title: string;
+  author: string;
+  year: number | null;
+  isbn: string | null;
+  publisher: string | null;
+  coverUrl: string | null; // original URL from Google/OpenLibrary
+  source: "google" | "openlibrary";
 }

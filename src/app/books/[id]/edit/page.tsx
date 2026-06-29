@@ -17,14 +17,8 @@ export default function EditBookPage() {
   const bookId = params.id as string;
 
   const [form, setForm] = useState({
-    title: "",
-    author: "",
-    isbn: "",
-    price: "",
-    stock: "",
-    category: "",
-    publisher: "",
-    cover_url: "",
+    title: "", author: "", isbn: "", price: "", stock: "",
+    category: "", publisher: "", cover_url: "", year: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +43,7 @@ export default function EditBookPage() {
           category: data.category || "",
           publisher: data.publisher || "",
           cover_url: data.cover_url || "",
+          year: data.year ? String(data.year) : "",
         });
       }
     } catch (err: any) {
@@ -78,6 +73,7 @@ export default function EditBookPage() {
           category: form.category.trim() || null,
           publisher: form.publisher.trim() || null,
           cover_url: form.cover_url.trim() || null,
+          year: form.year ? parseInt(form.year) : null,
         })
         .eq("id", bookId);
       if (error) throw error;
@@ -125,6 +121,15 @@ export default function EditBookPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
+        {/* Cover preview */}
+        {form.cover_url && (
+          <div className="flex justify-center">
+            <div className="w-24 h-36 rounded-lg overflow-hidden shadow-md border border-brand-100">
+              <img src={form.cover_url} alt={form.title} className="w-full h-full object-cover" />
+            </div>
+          </div>
+        )}
+
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="label">Judul Buku *</label>
@@ -135,6 +140,11 @@ export default function EditBookPage() {
             <label className="label">Penulis *</label>
             <input type="text" className="input-field" value={form.author}
               onChange={(e) => updateField("author", e.target.value)} required />
+          </div>
+          <div>
+            <label className="label">Tahun Terbit</label>
+            <input type="number" className="input-field" min="1000" max="2099" value={form.year}
+              onChange={(e) => updateField("year", e.target.value)} />
           </div>
           <div>
             <label className="label">ISBN</label>
@@ -168,7 +178,7 @@ export default function EditBookPage() {
               onChange={(e) => updateField("publisher", e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <label className="label">URL Cover (opsional)</label>
+            <label className="label">URL Cover</label>
             <input type="url" className="input-field" value={form.cover_url}
               onChange={(e) => updateField("cover_url", e.target.value)} />
           </div>
