@@ -1,14 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Camera, Upload, ClipboardPaste, X, Loader2 } from "lucide-react";
+import { Camera, Upload, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "@/lib/supabase";
 
 interface CoverUploaderProps {
   currentCover: string;
