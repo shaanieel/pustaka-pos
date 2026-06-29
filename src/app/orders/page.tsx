@@ -160,7 +160,6 @@ export default function OrdersPage() {
           order={viewingOrder}
           items={viewingItems}
           customerName={viewingOrder.customer_name || "Pelanggan Umum"}
-          cashierName="Kasir"
           paymentAmount={viewingOrder.final_amount}
           changeAmount={0}
           onClose={() => {

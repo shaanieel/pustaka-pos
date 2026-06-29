@@ -4,14 +4,13 @@ import { useRef, useCallback } from "react";
 import { toPng, toJpeg } from "html-to-image";
 import { Order, OrderItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
-import { Printer, Download, FileImage, FileText, X } from "lucide-react";
+import { Printer, FileImage, FileText, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface ReceiptProps {
   order: Order;
   items: OrderItem[];
   customerName: string;
-  cashierName: string;
   paymentAmount: number;
   changeAmount: number;
   onClose: () => void;
@@ -19,17 +18,17 @@ interface ReceiptProps {
 
 const STORE = {
   name: "BUNAYYA PUTRA",
-  subtitle: "Toko Buku & Alat Tulis",
-  address: "JL. MELATI NO. 23, KEL. SUKAMAJU",
+  subtitle: "Grosir Al-Qur'an dan Buku-Buku Islam",
+  address: "JL. CEMPAKA NO. 91 A/91 B",
   city: "PEKANBARU — RIAU",
-  phone: "TELP. 0812-XXXX-XXXX",
+  phone: "TELP. (0761) 7715424",
+  mobile: "0812-7012-9971",
 };
 
 export function Receipt({
   order,
   items,
   customerName,
-  cashierName,
   paymentAmount,
   changeAmount,
   onClose,
@@ -56,7 +55,6 @@ export function Receipt({
 
   const downloadPDF = useCallback(() => {
     if (!receiptRef.current) return;
-    // Clone the receipt into a print-optimized window
     const cloned = receiptRef.current.cloneNode(true) as HTMLElement;
     const html = `
       <!DOCTYPE html>
@@ -64,30 +62,25 @@ export function Receipt({
       <head>
         <title>Struk — ${STORE.name}</title>
         <style>
-          @page { margin: 12px; size: auto; }
+          @page { margin: 10px; size: auto; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             font-size: 13px;
             color: #022C22;
             background: #fff;
-            padding: 16px;
-            max-width: 380px;
+            padding: 14px;
+            max-width: 400px;
             margin: 0 auto;
           }
           body * { font-family: inherit !important; }
-          img[alt="logo"] { width: 64px; height: auto; display: block; margin: 0 auto 12px; }
+          img[alt="logo"] { width: 56px; height: auto; display: block; margin: 0 auto 10px; }
           .text-center { text-align: center; }
           .text-right { text-align: right; }
-          .text-brand-900 { color: #022C22; }
-          .text-brand-700 { color: #047857; }
-          .text-brand-500 { color: #10B981; }
-          .text-brand-400 { color: #34D399; }
-          .text-red-500 { color: #EF4444; }
           .font-extrabold { font-weight: 800; }
           .font-bold { font-weight: 700; }
           .font-semibold { font-weight: 600; }
-          .text-xs { font-size: 11px; }
+          .text-xs { font-size: 10px; }
           .text-sm { font-size: 12px; }
           .text-base { font-size: 14px; }
           .text-lg { font-size: 16px; }
@@ -95,27 +88,25 @@ export function Receipt({
           .border-dashed { border-style: dashed; }
           .border-t-2 { border-top-width: 2px; }
           .border-t { border-top-width: 1px; }
-          .border-brand-200 { border-color: #A7F3D0; }
           .pt-2 { padding-top: 8px; }
           .pt-3 { padding-top: 12px; }
           .pt-4 { padding-top: 16px; }
           .pb-4 { padding-bottom: 16px; }
           .mb-3 { margin-bottom: 12px; }
           .mb-4 { margin-bottom: 16px; }
+          .mt-2 { margin-top: 8px; }
           .mt-3 { margin-top: 12px; }
-          .mt-6 { margin-top: 24px; }
+          .mt-5 { margin-top: 20px; }
           .space-y-1 > * + * { margin-top: 4px; }
-          .space-y-1\.5 > * + * { margin-top: 6px; }
+          .space-y-1d5 > * + * { margin-top: 6px; }
           .flex { display: flex; }
           .justify-between { justify-content: space-between; }
           .grid { display: grid; }
-          .grid-cols-4 { grid-template-columns: 32px 1fr 62px 62px; }
           .gap-1 { gap: 4px; }
           .tracking-widest { letter-spacing: 0.1em; }
           .tracking-wider { letter-spacing: 0.05em; }
           .uppercase { text-transform: uppercase; }
-          .italic { font-style: italic; }
-          .leading-relaxed { line-height: 1.625; }
+          .leading-relaxed { line-height: 1.6; }
         </style>
       </head>
       <body>${cloned.outerHTML}</body>
@@ -132,11 +123,8 @@ export function Receipt({
     }, 400);
   }, [order.id]);
 
-  // For print from history: paymentAmount may be 0 (unknown); handle gracefully
-  const paidAmount =
-    paymentAmount > 0 ? paymentAmount : order.final_amount;
-  const change =
-    paymentAmount > 0 ? changeAmount : 0;
+  const paidAmount = paymentAmount > 0 ? paymentAmount : order.final_amount;
+  const change = paymentAmount > 0 ? changeAmount : 0;
 
   const dateFormatted = order.created_at
     ? new Date(order.created_at).toLocaleDateString("id-ID", {
@@ -162,8 +150,8 @@ export function Receipt({
             id="receipt-content"
             className="p-6 font-sans bg-white"
           >
-            {/* Close button (only on screen, not in export) */}
-            <div className="flex justify-end -mt-2 -mr-2 mb-3 no-print">
+            {/* Close button */}
+            <div className="flex justify-end -mt-2 -mr-2 mb-3">
               <button
                 onClick={onClose}
                 className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors"
@@ -172,32 +160,30 @@ export function Receipt({
               </button>
             </div>
 
-            {/* ═══════════ HEADER ═══════════ */}
+            {/* ═════ HEADER ═════ */}
             <div className="text-center border-b-2 border-dashed border-brand-200 pb-4 mb-4">
               <img
                 src="/logo.png"
                 alt="logo"
-                className="w-16 h-auto mx-auto mb-3"
+                className="w-14 h-auto mx-auto mb-2"
               />
               <h2 className="text-xl font-extrabold text-brand-900 tracking-widest uppercase">
                 {STORE.name}
               </h2>
-              <p className="text-xs font-semibold text-brand-600 mt-0.5">
+              <p className="text-[11px] font-semibold text-brand-600 mt-0.5">
                 {STORE.subtitle}
               </p>
-              <p className="text-[10px] text-brand-400 mt-0.5 uppercase tracking-wider leading-relaxed">
-                {STORE.address}
+              <p className="text-[10px] text-brand-400 mt-1 uppercase tracking-wider leading-relaxed">
+                {STORE.address}, {STORE.city}
                 <br />
-                {STORE.city}
-                <br />
-                {STORE.phone}
+                {STORE.phone} &middot; HP: {STORE.mobile}
               </p>
               <p className="text-[11px] font-semibold text-brand-500 mt-2">
                 {dateFormatted} &middot; {timeFormatted}
               </p>
             </div>
 
-            {/* ═══════════ INFO ═══════════ */}
+            {/* ═════ INFO ═════ */}
             <div className="text-xs text-brand-700 space-y-1 mb-4">
               <div className="flex justify-between">
                 <span className="text-brand-400">No. Faktur</span>
@@ -206,18 +192,14 @@ export function Receipt({
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-brand-400">Kasir</span>
-                <span className="font-semibold">{cashierName}</span>
-              </div>
-              <div className="flex justify-between">
                 <span className="text-brand-400">Pelanggan</span>
                 <span className="font-semibold">{customerName}</span>
               </div>
             </div>
 
-            {/* ═══════════ TABLE HEADER ═══════════ */}
+            {/* ═════ TABLE HEADER ═════ */}
             <div className="border-b-2 border-dashed border-brand-200 pb-1.5 mb-1">
-              <div className="grid grid-cols-[32px_1fr_62px_62px] gap-1 text-[10px] font-bold text-brand-500 uppercase tracking-wider">
+              <div className="grid grid-cols-[28px_1fr_62px_62px] gap-1 text-[10px] font-bold text-brand-500 uppercase tracking-wider">
                 <span className="text-center">Qty</span>
                 <span>JUDUL BUKU</span>
                 <span className="text-right">BRUTTO</span>
@@ -225,7 +207,7 @@ export function Receipt({
               </div>
             </div>
 
-            {/* ═══════════ ITEMS ═══════════ */}
+            {/* ═════ ITEMS ═════ */}
             <div className="space-y-1 mb-3">
               {items.map((item, i) => {
                 const totalBrutto = item.subtotal;
@@ -238,7 +220,7 @@ export function Receipt({
                 return (
                   <div
                     key={item.id || i}
-                    className="grid grid-cols-[32px_1fr_62px_62px] gap-1 text-[12px]"
+                    className="grid grid-cols-[28px_1fr_62px_62px] gap-1 text-[12px]"
                   >
                     <span className="text-center text-brand-500 font-semibold">
                       {item.quantity}
@@ -257,7 +239,7 @@ export function Receipt({
               })}
             </div>
 
-            {/* ═══════════ TOTALS ═══════════ */}
+            {/* ═════ TOTALS ═════ */}
             <div className="border-t-2 border-dashed border-brand-200 pt-3 space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-brand-500 font-medium">BRUTTO (Total Kotor)</span>
@@ -283,7 +265,7 @@ export function Receipt({
               </div>
             </div>
 
-            {/* ═══════════ PAYMENT ═══════════ */}
+            {/* ═════ PAYMENT ═════ */}
             <div className="mt-4 pt-3 border-t border-dashed border-brand-200 space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-brand-500 font-medium">Dibayar</span>
@@ -299,26 +281,20 @@ export function Receipt({
               </div>
             </div>
 
-            {/* ═══════════ FOOTER ═══════════ */}
-            <div className="mt-6 pt-4 text-center border-t-2 border-dashed border-brand-200">
-              <p className="text-sm font-bold text-brand-600">
-                Terima kasih telah berbelanja 😊
+            {/* ═════ FOOTER ═════ */}
+            <div className="mt-5 pt-4 text-center border-t-2 border-dashed border-brand-200">
+              <p className="text-sm font-bold text-brand-700 arabic-text">
+                Syukron Jazakumullahu Khoiron 🙏
               </p>
-              <p className="text-xs text-brand-400 mt-1 font-medium">
-                Selamat datang kembali di {STORE.name}
+              <p className="text-xs text-brand-400 mt-1.5 font-medium">
+                Selamat datang kembali di {STORE.name} 😊
               </p>
-              <div className="mt-3">
-                <span className="text-[10px] font-bold text-brand-500 tracking-[0.3em] uppercase">
-                  ~ {STORE.name} ~
-                </span>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* ═══════════ ACTION BAR ═══════════ */}
+        {/* ═════ ACTION BAR ═════ */}
         <div className="px-6 pb-6 pt-3 space-y-2 border-t border-brand-100 bg-white">
-          {/* Download row */}
           <div className="flex gap-2">
             <button
               onClick={() => downloadImage("jpg")}
@@ -342,7 +318,6 @@ export function Receipt({
               PDF
             </button>
           </div>
-          {/* Cetak + Tutup */}
           <div className="flex gap-3">
             <button onClick={onClose} className="btn-secondary flex-1">
               Tutup

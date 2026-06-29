@@ -38,7 +38,7 @@ export function Sidebar() {
               Bunayya<span className="text-brand-600">Putra</span>
             </h1>
             <p className="text-[11px] text-brand-400 font-medium">
-              Kasir Toko Buku
+            Grosir Al-Qur'an &amp; Buku Islam
             </p>
           </div>
         </Link>

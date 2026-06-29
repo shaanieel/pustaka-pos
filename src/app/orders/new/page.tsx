@@ -244,7 +244,6 @@ export default function NewOrderPage() {
         order={savedOrder}
         items={savedItems}
         customerName={selectedCustomer?.name || "Pelanggan Umum"}
-        cashierName="Kasir"
         paymentAmount={paymentAmount}
         changeAmount={changeAmount}
         onClose={handleCloseReceipt}
