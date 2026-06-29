@@ -16,6 +16,8 @@ interface ReceiptProps {
   paymentAmount: number;
   changeAmount: number;
   onClose: () => void;
+  cashierName?: string;
+  paymentMethod?: string;
 }
 
 const STORE = {
@@ -25,7 +27,121 @@ const STORE = {
   city: "PEKANBARU — RIAU",
   phone: "TELP. (0761) 7715424",
   mobile: "0812-7012-9971",
+  website: "bunayyaputra.com",
+  instagram: "@bunayyaputra",
 };
+
+// ── Inline SVG Logo: BP dalam buku terbuka (hijau) ──
+function LogoGreen({ className = "w-12 h-auto" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 60 60"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      {/* Open book */}
+      <path
+        d="M8 12 C8 10 10 8 12 8 L28 8 C30 8 32 10 32 12 L32 48 C28 46 24 44 20 44 C16 44 12 46 8 48 Z"
+        fill="#10B981"
+        opacity="0.9"
+      />
+      <path
+        d="M52 12 C52 10 50 8 48 8 L32 8 C30 8 28 10 28 12 L28 48 C32 46 36 44 40 44 C44 44 48 46 52 48 Z"
+        fill="#059669"
+        opacity="0.9"
+      />
+      {/* Spine */}
+      <rect x="28" y="8" width="4" height="38" rx="1" fill="#047857" />
+      {/* Pages */}
+      <rect x="11" y="14" width="18" height="26" rx="1" fill="white" opacity="0.3" />
+      <rect x="31" y="14" width="18" height="26" rx="1" fill="white" opacity="0.3" />
+      {/* Text BP */}
+      <text
+        x="30"
+        y="36"
+        textAnchor="middle"
+        fill="white"
+        fontSize="16"
+        fontWeight="bold"
+        fontFamily="Inter, sans-serif"
+        letterSpacing="1"
+      >
+        BP
+      </text>
+    </svg>
+  );
+}
+
+// ── Ikon SVG mini untuk informasi transaksi ──
+function IconReceipt() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" />
+      <path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h5" />
+    </svg>
+  );
+}
+function IconCalendar() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+function IconClock() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+function IconUser() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+function IconWallet() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+    </svg>
+  );
+}
+function IconMap() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+function IconGlobe() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+function IconInstagram() {
+  return (
+    <svg className="w-3.5 h-3.5 text-brand-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
 
 export function Receipt({
   order,
@@ -34,6 +150,8 @@ export function Receipt({
   paymentAmount,
   changeAmount,
   onClose,
+  cashierName = "Admin",
+  paymentMethod = "Tunai",
 }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +177,7 @@ export function Receipt({
     [order.id],
   );
 
-  // ─── Download PDF (langsung, bukan print dialog) ───────
+  // ─── Download PDF ──────────────────────────────────────
   const downloadPDF = useCallback(async () => {
     if (!receiptRef.current) return;
     try {
@@ -74,8 +192,7 @@ export function Receipt({
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
 
-      // A4-like in mm, scale to fit
-      const pdfWidth = 80; // 80mm thermal receipt width
+      const pdfWidth = 80;
       const pdfHeight = (imgHeight / imgWidth) * pdfWidth;
 
       const pdf = new jsPDF({
@@ -92,7 +209,7 @@ export function Receipt({
     }
   }, [order.id]);
 
-  // ─── Cetak (window.print dengan desain sama) ────────────
+  // ─── Cetak ────────────────────────────────────────────
   const handlePrint = useCallback(async () => {
     if (!receiptRef.current) return;
     try {
@@ -149,6 +266,9 @@ export function Receipt({
       })
     : "";
 
+  // QR data — store website
+  const qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`https://${STORE.website}`)}`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-scale-in">
       <div className="bg-white rounded-3xl shadow-float w-full max-w-md max-h-[93vh] overflow-hidden flex flex-col">
@@ -157,11 +277,11 @@ export function Receipt({
           <div
             ref={receiptRef}
             id="receipt-content"
-            className="p-6 font-sans bg-white"
+            className="bg-white font-sans"
           >
-            {/* Close button (hidden in export) */}
+            {/* ── Close button (hidden in export) ── */}
             <div
-              className="flex justify-end -mt-2 -mr-2 mb-3"
+              className="flex justify-end px-6 pt-4 pb-0"
               data-html2canvas-ignore="true"
             >
               <button
@@ -172,142 +292,255 @@ export function Receipt({
               </button>
             </div>
 
-            {/* ═════ HEADER ═════ */}
-            <div className="text-center border-b-2 border-dashed border-brand-200 pb-4 mb-4">
-              <img
-                src="/logo.png"
-                alt="logo"
-                className="w-14 h-auto mx-auto mb-2"
-              />
-              <h2 className="text-xl font-extrabold text-brand-900 tracking-widest uppercase">
+            {/* ═══════════════════ HEADER ═══════════════════ */}
+            <div className="px-6 pb-4 text-center">
+              <div className="flex justify-center mb-2">
+                <LogoGreen className="w-14 h-auto" />
+              </div>
+              <h2 className="text-xl font-extrabold text-brand-800 tracking-wider uppercase">
                 {STORE.name}
               </h2>
-              <p className="text-[11px] font-semibold text-brand-600 mt-0.5">
+              <p className="text-[11px] font-semibold text-brand-500 mt-0.5">
                 {STORE.subtitle}
               </p>
-              <p className="text-[10px] text-brand-400 mt-1 uppercase tracking-wider leading-relaxed">
-                {STORE.address}, {STORE.city}
-                <br />
-                {STORE.phone} &middot; HP: {STORE.mobile}
-              </p>
-              <p className="text-[11px] font-semibold text-brand-500 mt-2">
-                {dateFormatted} &middot; {timeFormatted}
-              </p>
-            </div>
-
-            {/* ═════ INFO ═════ */}
-            <div className="text-xs text-brand-700 space-y-1 mb-4">
-              <div className="flex justify-between">
-                <span className="text-brand-400">No. Faktur</span>
-                <span className="font-bold text-brand-800">
-                  #{order.id.slice(0, 8).toUpperCase()}
+              <div className="flex items-center justify-center gap-1 text-[10px] text-brand-400 mt-1">
+                <IconMap />
+                <span className="font-medium">
+                  {STORE.address}, {STORE.city}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-brand-400">Pelanggan</span>
-                <span className="font-semibold">{customerName}</span>
+              <div className="flex items-center justify-center gap-1 text-[10px] text-brand-400">
+                <svg className="w-3 h-3 text-brand-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                </svg>
+                <span>{STORE.phone} &middot; HP: {STORE.mobile}</span>
               </div>
             </div>
 
-            {/* ═════ TABLE HEADER ═════ */}
-            <div className="border-b-2 border-dashed border-brand-200 pb-1.5 mb-1">
-              <div className="grid grid-cols-[28px_1fr_62px_62px] gap-1 text-[10px] font-bold text-brand-500 uppercase tracking-wider">
+            {/* ── Divider ── */}
+            <div className="px-6">
+              <hr className="border-t border-brand-200" />
+            </div>
+
+            {/* ═══════════════ INFO TRANSAKSI ═══════════════ */}
+            <div className="px-6 py-3">
+              <h3 className="text-[11px] font-bold text-brand-600 uppercase tracking-wider mb-2">
+                Informasi Transaksi
+              </h3>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <IconReceipt />
+                  <span className="text-brand-400 w-[75px] shrink-0">No. Struk</span>
+                  <span className="font-bold text-brand-800">
+                    #{order.id.slice(0, 8).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconCalendar />
+                  <span className="text-brand-400 w-[75px] shrink-0">Tanggal</span>
+                  <span className="font-medium text-brand-700">{dateFormatted}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconClock />
+                  <span className="text-brand-400 w-[75px] shrink-0">Waktu</span>
+                  <span className="font-medium text-brand-700">{timeFormatted}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconUser />
+                  <span className="text-brand-400 w-[75px] shrink-0">Pelanggan</span>
+                  <span className="font-medium text-brand-700">{customerName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconUser />
+                  <span className="text-brand-400 w-[75px] shrink-0">Kasir</span>
+                  <span className="font-medium text-brand-700">{cashierName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconWallet />
+                  <span className="text-brand-400 w-[75px] shrink-0">Bayar</span>
+                  <span className="font-medium text-brand-700">{paymentMethod}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Divider ── */}
+            <div className="px-6">
+              <hr className="border-t border-brand-200" />
+            </div>
+
+            {/* ═══════════════ ITEM TABLE ═══════════════ */}
+            <div className="px-6 py-3">
+              {/* Table Header */}
+              <div
+                className="grid gap-1 text-[10px] font-bold text-brand-500 uppercase tracking-wider mb-1"
+                style={{ gridTemplateColumns: "24px 1fr 32px 62px 62px" }}
+              >
+                <span className="text-center">No.</span>
+                <span className="pl-0.5">Produk</span>
                 <span className="text-center">Qty</span>
-                <span>JUDUL BUKU</span>
-                <span className="text-right">BRUTTO</span>
-                <span className="text-right">NETTO</span>
+                <span className="text-right">Harga</span>
+                <span className="text-right pr-0.5">Jumlah</span>
               </div>
-            </div>
 
-            {/* ═════ ITEMS — no truncate, wraps to next line ═════ */}
-            <div className="space-y-1.5 mb-3">
-              {items.map((item, i) => {
-                const totalBrutto = item.subtotal;
-                const discountPerItem =
-                  order.discount > 0
-                    ? Math.round((order.discount / items.length) * (i + 1)) -
-                      Math.round((order.discount / items.length) * i)
-                    : 0;
-                const totalNetto = totalBrutto - discountPerItem;
-                return (
+              {/* Divider */}
+              <hr className="border-t border-brand-200 mb-1" />
+
+              {/* Items */}
+              <div className="space-y-0.5">
+                {items.map((item, i) => (
                   <div
                     key={item.id || i}
-                    className="grid grid-cols-[28px_1fr_62px_62px] gap-1 text-[12px] items-start py-0.5"
+                    className="grid gap-1 text-[12px] items-start py-0.5"
+                    style={{ gridTemplateColumns: "24px 1fr 32px 62px 62px" }}
                   >
-                    <span className="text-center text-brand-500 font-semibold pt-px">
-                      {item.quantity}
-                    </span>
-                    <span className="text-brand-900 font-semibold leading-snug break-words">
+                    <span className="text-center text-brand-400 pt-px">{i + 1}.</span>
+                    <span className="text-brand-800 font-semibold leading-snug break-words pt-px">
                       {item.book_title}
                     </span>
-                    <span className="text-right text-brand-600 font-medium pt-px">
-                      {formatRupiah(totalBrutto).replace("Rp", "")}
+                    <span className="text-center text-brand-600 font-medium pt-px">{item.quantity}</span>
+                    <span className="text-right text-brand-600 pt-px">
+                      {formatRupiah(item.price_at_time).replace("Rp", "")}
                     </span>
-                    <span className="text-right text-brand-800 font-bold pt-px">
-                      {formatRupiah(totalNetto).replace("Rp", "")}
+                    <span className="text-right text-brand-800 font-bold pt-px pr-0.5">
+                      {formatRupiah(item.subtotal).replace("Rp", "")}
                     </span>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
 
-            {/* ═════ TOTALS ═════ */}
-            <div className="border-t-2 border-dashed border-brand-200 pt-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-500 font-medium">
-                  BRUTTO (Total Kotor)
-                </span>
-                <span className="font-bold text-brand-800">
+            {/* ── Divider ── */}
+            <div className="px-6">
+              <hr className="border-t border-brand-200" />
+            </div>
+
+            {/* ═══════════════ TOTALS ═══════════════ */}
+            <div className="px-6 py-3 space-y-1.5">
+              {/* Subtotal */}
+              <div className="flex justify-between text-[13px]">
+                <span className="text-brand-500">Subtotal</span>
+                <span className="font-semibold text-brand-700">
                   {formatRupiah(order.total_amount)}
                 </span>
               </div>
+
+              {/* Diskon */}
               {order.discount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-brand-500 font-medium">Diskon</span>
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-brand-500">Diskon</span>
                   <span className="font-bold text-red-500">
                     -{formatRupiah(order.discount)}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between border-t-2 border-dashed border-brand-200 pt-2">
-                <span className="text-base font-black text-brand-900 uppercase tracking-wider">
-                  TOTAL NETTO
+
+              {/* Divider */}
+              <hr className="border-t border-dashed border-brand-300" />
+
+              {/* Total */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-brand-800 uppercase tracking-wider">
+                  Total
                 </span>
-                <span className="text-xl font-black text-brand-700">
+                <span className="text-lg font-black text-brand-700">
                   {formatRupiah(order.final_amount)}
                 </span>
               </div>
-            </div>
 
-            {/* ═════ PAYMENT ═════ */}
-            <div className="mt-4 pt-3 border-t border-dashed border-brand-200 space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-500 font-medium">Dibayar</span>
-                <span className="font-bold text-brand-800">
+              {/* Bayar */}
+              <div className="flex justify-between text-[13px]">
+                <span className="text-brand-500">Bayar</span>
+                <span className="font-semibold text-brand-700">
                   {formatRupiah(paidAmount)}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-500 font-medium">Kembali</span>
-                <span className="font-bold text-brand-700 text-base">
+
+              {/* Kembalian */}
+              <div className="flex justify-between text-[13px]">
+                <span className="text-brand-500">Kembalian</span>
+                <span className="font-bold text-brand-800">
                   {formatRupiah(change)}
                 </span>
               </div>
             </div>
 
-            {/* ═════ FOOTER ═════ */}
-            <div className="mt-5 pt-4 text-center border-t-2 border-dashed border-brand-200">
-              <p className="text-sm font-bold text-brand-700">
-                Syukron Jazakumullahu Khoiron 🙏
+            {/* ── Divider ── */}
+            <div className="px-6">
+              <hr className="border-t border-brand-200" />
+            </div>
+
+            {/* ═══════════════ QR + TERIMA KASIH ═══════════════ */}
+            <div className="px-6 pt-3 pb-2 text-center">
+              <div className="flex items-center justify-center gap-4">
+                {/* QR Code */}
+                <div className="w-[75px] h-[75px] rounded-lg overflow-hidden border border-brand-200 p-0.5 bg-white">
+                  <img
+                    src={qrDataUrl}
+                    alt="QR Code"
+                    className="w-full h-full object-contain"
+                    crossOrigin="anonymous"
+                  />
+                </div>
+
+                {/* Thank You */}
+                <div className="text-left">
+                  <p className="text-sm font-bold text-brand-700 leading-tight">
+                    Terima kasih 🙏
+                  </p>
+                  <p className="text-[11px] text-brand-500 mt-0.5 leading-snug">
+                    Telah berbelanja di {STORE.name}
+                  </p>
+                  <p className="text-[11px] text-brand-500 leading-snug">
+                    Semoga bermanfaat 😊
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Info */}
+            <div className="px-6 pb-3 text-center">
+              <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-1">
+                Kunjungi kami di:
               </p>
-              <p className="text-xs text-brand-400 mt-1.5 font-medium">
-                Selamat datang kembali di {STORE.name} 😊
+              <div className="flex items-center justify-center gap-3 text-[10px] text-brand-500">
+                <span className="flex items-center gap-0.5">
+                  <IconGlobe /> {STORE.website}
+                </span>
+                <span className="flex items-center gap-0.5">
+                  <IconInstagram /> {STORE.instagram}
+                </span>
+                <span className="flex items-center gap-0.5">
+                  <IconMap /> Pekanbaru
+                </span>
+              </div>
+            </div>
+
+            {/* ═══════════════ FOOTER ═══════════════ */}
+            <div className="bg-brand-800 px-6 py-4 text-center">
+              <svg
+                className="w-5 h-5 text-brand-300 mx-auto mb-1"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {/* Open book icon */}
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+              </svg>
+              <p className="text-xs font-medium text-brand-200 italic leading-relaxed">
+                &ldquo;Ilmu adalah kehidupan hati.&rdquo;
+              </p>
+              <p className="text-[10px] text-brand-400 mt-0.5">
+                &mdash; Imam Al-Ghazali
               </p>
             </div>
           </div>
         </div>
 
-        {/* ═════ ACTION BAR (hidden in export) ═════ */}
+        {/* ═══════════════ ACTION BAR ═══════════════ */}
         <div
           className="px-6 pb-6 pt-3 space-y-2 border-t border-brand-100 bg-white"
           data-html2canvas-ignore="true"
