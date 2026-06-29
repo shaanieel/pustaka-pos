@@ -10,7 +10,8 @@ import { BookSearchCard } from "@/components/BookSearchCard";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
 import { CategoryPicker } from "@/components/CategoryPicker";
-import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus } from "lucide-react";
+import { getCategoryPrefix } from "@/lib/categories";
+import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus, Hash } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatRupiah } from "@/lib/utils";
@@ -226,8 +227,44 @@ export default function AddBookPage() {
     }
   }
 
+  // ── AUTO-GENERATE BOOK CODE dari kategori ──
+  async function generateBookCode(category: string) {
+    if (!category) {
+      updateField("book_code", "");
+      return;
+    }
+    const prefix = getCategoryPrefix(category);
+    try {
+      // Cari semua book_code dengan prefix ini, ambil nomor terbesar
+      const { data } = await supabase
+        .from("books")
+        .select("book_code")
+        .like("book_code", `${prefix}%`);
+
+      let maxNum = 0;
+      if (data) {
+        for (const row of data) {
+          if (!row.book_code) continue;
+          const numStr = row.book_code.replace(prefix, "");
+          const num = parseInt(numStr) || 0;
+          if (num > maxNum) maxNum = num;
+        }
+      }
+      const nextNum = maxNum + 1;
+      const code = `${prefix}${String(nextNum).padStart(4, "0")}`;
+      updateField("book_code", code);
+    } catch {
+      // Fallback: tetap kasih prefix + 0001
+      updateField("book_code", `${prefix}0001`);
+    }
+  }
+
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    // Auto-generate book code pas kategori dipilih
+    if (field === "category") {
+      generateBookCode(value);
+    }
   }
 
   function clearForm() {
@@ -356,9 +393,16 @@ export default function AddBookPage() {
                 value={form.stock} onChange={(e) => updateField("stock", e.target.value)} />
             </div>
             <div>
-              <label className="label">Kode Buku</label>
-              <input type="text" className="input-field" placeholder="BP-001"
-                value={form.book_code} onChange={(e) => updateField("book_code", e.target.value)} />
+              <label className="label flex items-center gap-1">
+                <Hash className="w-3 h-3" />
+                Kode Buku
+              </label>
+              <div className={`input-field flex items-center justify-between ${form.book_code ? "bg-brand-50 font-bold text-brand-700" : "text-brand-400"}`}>
+                <span>{form.book_code || "Pilih kategori dulu"}</span>
+                {form.book_code && (
+                  <span className="text-[10px] font-normal text-brand-400 uppercase tracking-wide">auto</span>
+                )}
+              </div>
             </div>
             <div>
               <CategoryPicker value={form.category} onChange={(v) => updateField("category", v)} />

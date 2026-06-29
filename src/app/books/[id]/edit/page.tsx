@@ -6,7 +6,7 @@ export const runtime = "edge";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Save, Trash2, ScanLine, Download } from "lucide-react";
+import { ArrowLeft, Save, Trash2, ScanLine, Download, Hash } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -15,6 +15,7 @@ import { CoverUploader } from "@/components/CoverUploader";
 import { CategoryPicker } from "@/components/CategoryPicker";
 import { QRCodeSVG } from "qrcode.react";
 import { deleteCoverFromR2 } from "@/lib/compress";
+import { getCategoryPrefix } from "@/lib/categories";
 
 export default function EditBookPage() {
   const router = useRouter();
@@ -111,8 +112,40 @@ export default function EditBookPage() {
     }
   }, []);
 
+  // ── AUTO-GENERATE BOOK CODE dari kategori ──
+  async function generateBookCode(category: string) {
+    if (!category) return;
+    const prefix = getCategoryPrefix(category);
+    try {
+      const { data } = await supabase
+        .from("books")
+        .select("book_code")
+        .like("book_code", `${prefix}%`);
+
+      let maxNum = 0;
+      if (data) {
+        for (const row of data) {
+          if (!row.book_code) continue;
+          const numStr = row.book_code.replace(prefix, "");
+          const num = parseInt(numStr) || 0;
+          if (num > maxNum) maxNum = num;
+        }
+      }
+      const nextNum = maxNum + 1;
+      updateField("book_code", `${prefix}${String(nextNum).padStart(4, "0")}`);
+    } catch {
+      // silent
+    }
+  }
+
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "category") {
+      // Only auto-generate if book_code is currently empty or starts with old prefix
+      const prefix = getCategoryPrefix(value);
+      if (!value) return;
+      generateBookCode(value);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -228,9 +261,16 @@ export default function EditBookPage() {
               onChange={(e) => updateField("stock", e.target.value)} />
           </div>
           <div>
-            <label className="label">Kode Buku</label>
-            <input type="text" className="input-field" placeholder="BP-001" value={form.book_code}
-              onChange={(e) => updateField("book_code", e.target.value)} />
+            <label className="label flex items-center gap-1">
+              <Hash className="w-3 h-3" />
+              Kode Buku
+            </label>
+            <div className={`input-field flex items-center justify-between ${form.book_code ? "bg-brand-50 font-bold text-brand-700" : "text-brand-400"}`}>
+              <span>{form.book_code || "Pilih kategori dulu"}</span>
+              {form.book_code && (
+                <span className="text-[10px] font-normal text-brand-400 uppercase tracking-wide">auto</span>
+              )}
+            </div>
           </div>
           <div>
             <CategoryPicker value={form.category} onChange={(v) => updateField("category", v)} />
