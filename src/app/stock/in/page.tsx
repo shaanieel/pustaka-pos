@@ -19,6 +19,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 interface StockEntry {
@@ -28,6 +29,7 @@ interface StockEntry {
 }
 
 export default function StockInPage() {
+  const router = useRouter();
   const [entries, setEntries] = useState<StockEntry[]>([]);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,7 +56,25 @@ export default function StockInPage() {
       toast.dismiss("scan-stock");
 
       if (error || !data) {
-        toast.error(`Buku dengan ISBN ${isbn} tidak ditemukan di database`, { duration: 4000 });
+        // Buku belum ada di database → kasih opsi tambah
+        toast(
+          (t) => (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm">📚 ISBN {isbn} belum terdaftar</span>
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  router.push(`/books/add?isbn=${encodeURIComponent(isbn)}`);
+                }}
+                className="btn-primary text-xs py-1.5 px-3 w-full flex items-center justify-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                Tambah ke Database
+              </button>
+            </div>
+          ),
+          { duration: 8000 }
+        );
         setScanning(false);
         return;
       }

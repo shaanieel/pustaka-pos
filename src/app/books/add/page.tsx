@@ -2,9 +2,9 @@
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BookSearchResult } from "@/types";
 import { BookSearchCard } from "@/components/BookSearchCard";
 import { ScannerButton } from "@/components/ScannerButton";
@@ -16,7 +16,9 @@ import { formatRupiah } from "@/lib/utils";
 
 export default function AddBookPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const searchRef = useRef<HTMLInputElement>(null);
+  const initialIsbnRef = useRef(false);
 
   // Search state
   const [searchQ, setSearchQ] = useState("");
@@ -32,6 +34,18 @@ export default function AddBookPage() {
   });
   const [saving, setSaving] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
+
+  // ── Auto-trigger ISBN search dari URL (?isbn=...) ──
+  useEffect(() => {
+    const isbn = searchParams.get("isbn");
+    if (isbn && !initialIsbnRef.current) {
+      initialIsbnRef.current = true;
+      // Delay kecil biar component mount dulu
+      setTimeout(() => {
+        handleScannedISBN(isbn);
+      }, 500);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── SCAN BARCODE HANDLER (Model 1: Master Barang) ──
   const handleScannedISBN = useCallback(async (isbn: string) => {

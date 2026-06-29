@@ -23,9 +23,11 @@ import {
   ScanLine,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 export default function NewOrderPage() {
+  const router = useRouter();
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -66,8 +68,25 @@ export default function NewOrderPage() {
       toast.dismiss("scan-kasir");
 
       if (error || !data) {
-        // Coba cari di Google Books sebagai fallback (tapi ga auto-add — user harus ke tambah buku dulu)
-        toast.error(`Buku dengan ISBN ${isbn} tidak ditemukan di database`, { duration: 4000 });
+        // Buku belum ada di database → kasih opsi tambah
+        toast(
+          (t) => (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm">📚 ISBN {isbn} belum terdaftar</span>
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  router.push(`/books/add?isbn=${encodeURIComponent(isbn)}`);
+                }}
+                className="btn-primary text-xs py-1.5 px-3 w-full flex items-center justify-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                Tambah ke Database
+              </button>
+            </div>
+          ),
+          { duration: 8000 }
+        );
         return;
       }
 
