@@ -1,28 +1,25 @@
 // POST /api/upload-cover
-// Supports 3 input modes:
-//   1. JSON: { imageUrl: string } — download from URL
-//   2. FormData: { file: File } — direct upload (camera / file picker)
-//   3. JSON: { base64: string, filename?: string } — clipboard paste
-// Uploads to Supabase Storage (bucket: covers)
-// Edge-compatible (no Node.js deps)
+// Upload cover buku ke Cloudflare R2 (bucket: poster-buku)
+// Edge-compatible via aws4fetch
+import { AwsClient } from "aws4fetch";
+
 export const runtime = "edge";
 
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPA_SERVICE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6bHNjY3h1b2tmendkbHFyb2h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjY2MjYwNywiZXhwIjoyMDk4MjM4NjA3fQ.YJpieTzfT9uhN1Dyd6JXOiqBSXlprIsJNieZmaFHK3g";
-const BUCKET = "covers";
+const R2_ACCOUNT_ID = "5f3c24963db02b0b6a73df072d2675e2";
+const R2_ACCESS_KEY_ID = "5612ca8b1d07639a96a0b8d49a47349d";
+const R2_SECRET_ACCESS_KEY =
+  "aaa17675146e84798a748d641e663669a05f762639bce4fe3c90ab563843bdab";
+const R2_BUCKET = "poster-buku";
+const R2_BASE = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}`;
 
-async function uploadToSupabase(
-  imageData: ArrayBuffer,
-  contentType: string,
-  filename?: string
-): Promise<{ url: string; key: string } | { error: string; detail?: string }> {
-  if (!SUPA_URL || !SUPA_SERVICE_KEY) {
-    return { error: "Supabase Storage not configured" };
-  }
+const r2 = new AwsClient({
+  accessKeyId: R2_ACCESS_KEY_ID,
+  secretAccessKey: R2_SECRET_ACCESS_KEY,
+  service: "s3",
+  region: "auto",
+});
 
+function genKey(contentType: string, filename?: string): string {
   const ext = contentType.includes("png")
     ? ".png"
     : contentType.includes("webp")
@@ -30,40 +27,38 @@ async function uploadToSupabase(
     : contentType.includes("gif")
     ? ".gif"
     : ".jpg";
+  return filename
+    ? `${filename}${ext}`
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+}
 
-  const key = filename
-    ? `covers/${filename}${ext}`
-    : `covers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+async function uploadToR2(
+  imageData: ArrayBuffer,
+  contentType: string,
+  filename?: string
+): Promise<{ url: string; key: string } | { error: string; detail?: string }> {
+  const key = genKey(contentType, filename);
 
-  const uploadUrl = `${SUPA_URL}/storage/v1/object/${key}`;
-  const publicUrl = `${SUPA_URL}/storage/v1/object/public/${key}`;
-
-  const res = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${SUPA_SERVICE_KEY}`,
-      "Content-Type": contentType,
-      "x-upsert": "true",
-    },
+  const res = await r2.fetch(`${R2_BASE}/${key}`, {
+    method: "PUT",
+    headers: { "Content-Type": contentType || "image/jpeg" },
     body: imageData,
   });
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
     return {
-      error: `Supabase upload: HTTP ${res.status}`,
+      error: `R2 upload: HTTP ${res.status}`,
       detail: errText.slice(0, 300),
     };
   }
 
-  return { url: publicUrl, key };
+  // Proxy URL — serve image via /api/cover/[key] (no need for R2 public access)
+  const proxyUrl = `/api/cover/${key}`;
+  return { url: proxyUrl, key };
 }
 
 export async function POST(request: Request) {
-  if (!SUPA_URL || !SUPA_SERVICE_KEY) {
-    return Response.json({ error: "Supabase Storage not configured" }, { status: 500 });
-  }
-
   const contentType = request.headers.get("content-type") || "";
 
   // ── Mode 1: FormData (file upload from camera / file picker) ──
@@ -78,14 +73,9 @@ export async function POST(request: Request) {
       const filename =
         (formData.get("filename") as string) ||
         file.name.replace(/\.[^.]+$/, "");
-      const result = await uploadToSupabase(
-        buffer,
-        file.type || "image/jpeg",
-        filename
-      );
-      if ("error" in result) {
+      const result = await uploadToR2(buffer, file.type || "image/jpeg", filename);
+      if ("error" in result)
         return Response.json(result, { status: 500 });
-      }
       return Response.json(result);
     } catch (e: any) {
       return Response.json(
@@ -95,21 +85,18 @@ export async function POST(request: Request) {
     }
   }
 
-  // ── Mode 2 & 3: JSON body ──
+  // ── Mode 2: JSON body ──
   let body: { imageUrl?: string; base64?: string; filename?: string };
   try {
     body = await request.json();
   } catch {
     return Response.json(
-      {
-        error:
-          "Invalid JSON. Send either: {imageUrl}, {base64}, or FormData with file.",
-      },
+      { error: "Invalid JSON. Send either: {imageUrl}, {base64}, or FormData with file." },
       { status: 400 }
     );
   }
 
-  // ── Mode 2: Base64 (clipboard paste) ──
+  // ── Mode 2a: Base64 (clipboard paste) ──
   if (body.base64) {
     try {
       const b64 = body.base64.replace(/^data:image\/\w+;base64,/, "");
@@ -117,20 +104,14 @@ export async function POST(request: Request) {
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      // Detect content type from base64 prefix
       let mimeType = "image/jpeg";
       if (body.base64.startsWith("data:image/png")) mimeType = "image/png";
       else if (body.base64.startsWith("data:image/webp")) mimeType = "image/webp";
       else if (body.base64.startsWith("data:image/gif")) mimeType = "image/gif";
 
-      const result = await uploadToSupabase(
-        bytes.buffer,
-        mimeType,
-        body.filename
-      );
-      if ("error" in result) {
+      const result = await uploadToR2(bytes.buffer, mimeType, body.filename);
+      if ("error" in result)
         return Response.json(result, { status: 500 });
-      }
       return Response.json(result);
     } catch (e: any) {
       return Response.json(
@@ -140,14 +121,11 @@ export async function POST(request: Request) {
     }
   }
 
-  // ── Mode 3: Download from URL ──
+  // ── Mode 2b: Download from URL ──
   const { imageUrl, filename } = body;
   if (!imageUrl)
     return Response.json(
-      {
-        error:
-          "One of: imageUrl, base64, or file (FormData) required",
-      },
+      { error: "One of: imageUrl, base64, or file (FormData) required." },
       { status: 400 }
     );
 
@@ -165,9 +143,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await uploadToSupabase(imageData, ct, filename);
-  if ("error" in result) {
+  const result = await uploadToR2(imageData, ct, filename);
+  if ("error" in result)
     return Response.json(result, { status: 500 });
-  }
   return Response.json(result);
 }

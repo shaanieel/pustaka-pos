@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback } from "react";
 import { Camera, Upload, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { supabase } from "@/lib/supabase";
 
 interface CoverUploaderProps {
   currentCover: string;
@@ -16,7 +15,7 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadToSupabase = useCallback(
+  const uploadToR2 = useCallback(
     async (file: File | Blob, source: string) => {
       if (!file.type.startsWith("image/")) {
         toast.error("File harus gambar (JPG, PNG, WebP)");
@@ -31,36 +30,26 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
       onCoverChange(currentCover, true);
 
       try {
-        const ext = file.type.includes("png")
-          ? ".png"
-          : file.type.includes("webp")
-          ? ".webp"
-          : file.type.includes("gif")
-          ? ".gif"
-          : ".jpg";
-        const key = filename
-          ? `covers/${filename}${ext}`
-          : `covers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+        const formData = new FormData();
+        formData.append("file", file);
+        if (filename) formData.append("filename", filename);
 
-        const { data, error } = await supabase.storage
-          .from("covers")
-          .upload(key, file, {
-            contentType: file.type || "image/jpeg",
-            upsert: true,
-          });
+        const res = await fetch("/api/upload-cover", {
+          method: "POST",
+          body: formData,
+        });
 
-        if (error) throw new Error(error.message);
+        const data = await res.json();
 
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from("covers")
-          .getPublicUrl(key);
+        if (!res.ok || data.error) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
 
-        if (urlData?.publicUrl) {
-          onCoverChange(urlData.publicUrl, false);
+        if (data.url) {
+          onCoverChange(data.url, false);
           toast.success(`Cover dari ${source} diupload!`);
         } else {
-          throw new Error("Gagal mendapatkan URL publik");
+          throw new Error("Gagal mendapatkan URL");
         }
       } catch (e: any) {
         toast.error(e.message || "Gagal upload cover");
@@ -82,13 +71,13 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
           e.preventDefault();
           const file = items[i].getAsFile();
           if (file) {
-            uploadToSupabase(file, "clipboard");
+            uploadToR2(file, "clipboard");
           }
           return;
         }
       }
     },
-    [uploadToSupabase]
+    [uploadToR2]
   );
 
   // Handle file drop
@@ -97,15 +86,15 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
       e.preventDefault();
       setDragOver(false);
       const file = e.dataTransfer.files?.[0];
-      if (file) uploadToSupabase(file, "drag & drop");
+      if (file) uploadToR2(file, "drag & drop");
     },
-    [uploadToSupabase]
+    [uploadToR2]
   );
 
   // Handle file picker
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadToSupabase(file, "file picker");
+    if (file) uploadToR2(file, "file picker");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
