@@ -30,17 +30,14 @@ const STORE = {
   instagram: "@bunayyaputra",
 };
 
-// ── SVG Logo: BP dalam buku ──
-function LogoGreen({ className = "w-12 h-auto" }: { className?: string }) {
+// ── Header Logo (recolored to brand green) ──
+function StoreLogo({ className = "w-12 h-auto" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <path d="M8 12 C8 10 10 8 12 8 L28 8 C30 8 32 10 32 12 L32 48 C28 46 24 44 20 44 C16 44 12 46 8 48 Z" fill="#10B981" opacity="0.9" />
-      <path d="M52 12 C52 10 50 8 48 8 L32 8 C30 8 28 10 28 12 L28 48 C32 46 36 44 40 44 C44 44 48 46 52 48 Z" fill="#059669" opacity="0.9" />
-      <rect x="28" y="8" width="4" height="38" rx="1" fill="#047857" />
-      <rect x="11" y="14" width="18" height="26" rx="1" fill="white" opacity="0.3" />
-      <rect x="31" y="14" width="18" height="26" rx="1" fill="white" opacity="0.3" />
-      <text x="30" y="36" textAnchor="middle" fill="white" fontSize="16" fontWeight="bold" fontFamily="Inter, sans-serif" letterSpacing="1">BP</text>
-    </svg>
+    <img
+      src="/logo-green-hue.png"
+      alt="Bunayya Putra"
+      className={className}
+    />
   );
 }
 
@@ -187,7 +184,7 @@ export function Receipt({
             {/* ═══════════════════ HEADER ═══════════════════ */}
             <div className="px-6 pb-3 text-center">
               <div className="flex justify-center mb-2">
-                <LogoGreen className="w-14 h-auto" />
+                <StoreLogo className="w-14 h-auto" />
               </div>
               <h2 className="text-xl font-extrabold text-brand-800 tracking-wider uppercase">
                 {STORE.name}
