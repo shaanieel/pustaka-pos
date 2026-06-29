@@ -2,6 +2,8 @@
 
 import { useRef, useCallback } from "react";
 import { toPng, toJpeg } from "html-to-image";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import { Order, OrderItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
 import { Printer, FileImage, FileText, X } from "lucide-react";
@@ -35,93 +37,100 @@ export function Receipt({
 }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
 
-  const downloadImage = useCallback(async (format: "jpg" | "png") => {
+  // ─── Download JPG / PNG ─────────────────────────────────
+  const downloadImage = useCallback(
+    async (format: "jpg" | "png") => {
+      if (!receiptRef.current) return;
+      try {
+        const dataUrl =
+          format === "png"
+            ? await toPng(receiptRef.current, { quality: 1, pixelRatio: 2 })
+            : await toJpeg(receiptRef.current, { quality: 0.95, pixelRatio: 2 });
+
+        const link = document.createElement("a");
+        link.download = `struk-${order.id.slice(0, 8)}.${format}`;
+        link.href = dataUrl;
+        link.click();
+        toast.success(`Struk terdownload sebagai ${format.toUpperCase()}`);
+      } catch {
+        toast.error("Gagal download struk");
+      }
+    },
+    [order.id],
+  );
+
+  // ─── Download PDF (langsung, bukan print dialog) ───────
+  const downloadPDF = useCallback(async () => {
     if (!receiptRef.current) return;
     try {
-      const dataUrl =
-        format === "png"
-          ? await toPng(receiptRef.current, { quality: 1, pixelRatio: 2 })
-          : await toJpeg(receiptRef.current, { quality: 0.95, pixelRatio: 2 });
+      const canvas = await html2canvas(receiptRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
 
-      const link = document.createElement("a");
-      link.download = `struk-${order.id.slice(0, 8)}.${format}`;
-      link.href = dataUrl;
-      link.click();
-      toast.success(`Struk terdownload sebagai ${format.toUpperCase()}`);
+      const imgData = canvas.toDataURL("image/png");
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // A4-like in mm, scale to fit
+      const pdfWidth = 80; // 80mm thermal receipt width
+      const pdfHeight = (imgHeight / imgWidth) * pdfWidth;
+
+      const pdf = new jsPDF({
+        orientation: pdfHeight > pdfWidth ? "portrait" : "landscape",
+        unit: "mm",
+        format: [pdfWidth, pdfHeight],
+      });
+
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`struk-${order.id.slice(0, 8)}.pdf`);
+      toast.success("Struk terdownload sebagai PDF");
     } catch {
-      toast.error("Gagal download struk");
+      toast.error("Gagal download PDF");
     }
   }, [order.id]);
 
-  const downloadPDF = useCallback(() => {
+  // ─── Cetak (window.print dengan desain sama) ────────────
+  const handlePrint = useCallback(async () => {
     if (!receiptRef.current) return;
-    const cloned = receiptRef.current.cloneNode(true) as HTMLElement;
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Struk — ${STORE.name}</title>
-        <style>
-          @page { margin: 10px; size: auto; }
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            font-size: 13px;
-            color: #022C22;
-            background: #fff;
-            padding: 14px;
-            max-width: 400px;
-            margin: 0 auto;
-          }
-          body * { font-family: inherit !important; }
-          img[alt="logo"] { width: 56px; height: auto; display: block; margin: 0 auto 10px; }
-          .text-center { text-align: center; }
-          .text-right { text-align: right; }
-          .font-extrabold { font-weight: 800; }
-          .font-bold { font-weight: 700; }
-          .font-semibold { font-weight: 600; }
-          .text-xs { font-size: 10px; }
-          .text-sm { font-size: 12px; }
-          .text-base { font-size: 14px; }
-          .text-lg { font-size: 16px; }
-          .text-xl { font-size: 18px; }
-          .border-dashed { border-style: dashed; }
-          .border-t-2 { border-top-width: 2px; }
-          .border-t { border-top-width: 1px; }
-          .pt-2 { padding-top: 8px; }
-          .pt-3 { padding-top: 12px; }
-          .pt-4 { padding-top: 16px; }
-          .pb-4 { padding-bottom: 16px; }
-          .mb-3 { margin-bottom: 12px; }
-          .mb-4 { margin-bottom: 16px; }
-          .mt-2 { margin-top: 8px; }
-          .mt-3 { margin-top: 12px; }
-          .mt-5 { margin-top: 20px; }
-          .space-y-1 > * + * { margin-top: 4px; }
-          .space-y-1d5 > * + * { margin-top: 6px; }
-          .flex { display: flex; }
-          .justify-between { justify-content: space-between; }
-          .grid { display: grid; }
-          .gap-1 { gap: 4px; }
-          .tracking-widest { letter-spacing: 0.1em; }
-          .tracking-wider { letter-spacing: 0.05em; }
-          .uppercase { text-transform: uppercase; }
-          .leading-relaxed { line-height: 1.6; }
-        </style>
-      </head>
-      <body>${cloned.outerHTML}</body>
-      </html>
-    `;
+    try {
+      const canvas = await html2canvas(receiptRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => {
+      const imgData = canvas.toDataURL("image/png");
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return;
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Cetak Struk — ${STORE.name}</title>
+          <style>
+            @page { margin: 0; }
+            * { margin: 0; padding: 0; }
+            body { display: flex; justify-content: center; background: #fff; }
+            img { max-width: 100%; height: auto; display: block; }
+          </style>
+        </head>
+        <body>
+          <img src="${imgData}" alt="Struk" />
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
       printWindow.focus();
-      printWindow.print();
-    }, 400);
-  }, [order.id]);
+      setTimeout(() => printWindow.print(), 500);
+    } catch {
+      toast.error("Gagal mencetak");
+    }
+  }, []);
 
   const paidAmount = paymentAmount > 0 ? paymentAmount : order.final_amount;
   const change = paymentAmount > 0 ? changeAmount : 0;
@@ -150,8 +159,11 @@ export function Receipt({
             id="receipt-content"
             className="p-6 font-sans bg-white"
           >
-            {/* Close button */}
-            <div className="flex justify-end -mt-2 -mr-2 mb-3">
+            {/* Close button (hidden in export) */}
+            <div
+              className="flex justify-end -mt-2 -mr-2 mb-3"
+              data-html2canvas-ignore="true"
+            >
               <button
                 onClick={onClose}
                 className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors"
@@ -207,8 +219,8 @@ export function Receipt({
               </div>
             </div>
 
-            {/* ═════ ITEMS ═════ */}
-            <div className="space-y-1 mb-3">
+            {/* ═════ ITEMS — no truncate, wraps to next line ═════ */}
+            <div className="space-y-1.5 mb-3">
               {items.map((item, i) => {
                 const totalBrutto = item.subtotal;
                 const discountPerItem =
@@ -220,18 +232,18 @@ export function Receipt({
                 return (
                   <div
                     key={item.id || i}
-                    className="grid grid-cols-[28px_1fr_62px_62px] gap-1 text-[12px]"
+                    className="grid grid-cols-[28px_1fr_62px_62px] gap-1 text-[12px] items-start py-0.5"
                   >
-                    <span className="text-center text-brand-500 font-semibold">
+                    <span className="text-center text-brand-500 font-semibold pt-px">
                       {item.quantity}
                     </span>
-                    <span className="text-brand-900 font-semibold truncate">
+                    <span className="text-brand-900 font-semibold leading-snug break-words">
                       {item.book_title}
                     </span>
-                    <span className="text-right text-brand-600 font-medium">
+                    <span className="text-right text-brand-600 font-medium pt-px">
                       {formatRupiah(totalBrutto).replace("Rp", "")}
                     </span>
-                    <span className="text-right text-brand-800 font-bold">
+                    <span className="text-right text-brand-800 font-bold pt-px">
                       {formatRupiah(totalNetto).replace("Rp", "")}
                     </span>
                   </div>
@@ -242,7 +254,9 @@ export function Receipt({
             {/* ═════ TOTALS ═════ */}
             <div className="border-t-2 border-dashed border-brand-200 pt-3 space-y-1.5">
               <div className="flex justify-between text-sm">
-                <span className="text-brand-500 font-medium">BRUTTO (Total Kotor)</span>
+                <span className="text-brand-500 font-medium">
+                  BRUTTO (Total Kotor)
+                </span>
                 <span className="font-bold text-brand-800">
                   {formatRupiah(order.total_amount)}
                 </span>
@@ -283,7 +297,7 @@ export function Receipt({
 
             {/* ═════ FOOTER ═════ */}
             <div className="mt-5 pt-4 text-center border-t-2 border-dashed border-brand-200">
-              <p className="text-sm font-bold text-brand-700 arabic-text">
+              <p className="text-sm font-bold text-brand-700">
                 Syukron Jazakumullahu Khoiron 🙏
               </p>
               <p className="text-xs text-brand-400 mt-1.5 font-medium">
@@ -293,8 +307,11 @@ export function Receipt({
           </div>
         </div>
 
-        {/* ═════ ACTION BAR ═════ */}
-        <div className="px-6 pb-6 pt-3 space-y-2 border-t border-brand-100 bg-white">
+        {/* ═════ ACTION BAR (hidden in export) ═════ */}
+        <div
+          className="px-6 pb-6 pt-3 space-y-2 border-t border-brand-100 bg-white"
+          data-html2canvas-ignore="true"
+        >
           <div className="flex gap-2">
             <button
               onClick={() => downloadImage("jpg")}
@@ -322,7 +339,7 @@ export function Receipt({
             <button onClick={onClose} className="btn-secondary flex-1">
               Tutup
             </button>
-            <button onClick={downloadPDF} className="btn-primary flex-1">
+            <button onClick={handlePrint} className="btn-primary flex-1">
               <Printer className="w-4 h-4" />
               Cetak
             </button>
