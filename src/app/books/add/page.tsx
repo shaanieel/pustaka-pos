@@ -59,11 +59,14 @@ export default function AddBookPage() {
   }
 
   // Select a search result → upload cover to R2 → fill form
+  const r2Warned = useRef(false);
   async function handleSelect(result: BookSearchResult) {
-    // Upload cover to our R2 storage
-    let r2CoverUrl = "";
+    // Upload cover to our R2 storage (non-blocking — fallback gracefully)
+    let r2CoverUrl = result.coverUrl || "";
     if (result.coverUrl) {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
         const upRes = await fetch("/api/upload-cover", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -71,18 +74,22 @@ export default function AddBookPage() {
             imageUrl: result.coverUrl,
             filename: result.isbn || result.title.replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40),
           }),
+          signal: controller.signal,
         });
-        const upData = await upRes.json();
-        if (upData.url) {
-          r2CoverUrl = upData.url;
-        } else {
-          // If R2 not configured, fallback to original URL
-          r2CoverUrl = result.coverUrl;
-          toast("R2 belum dikonfigurasi — menggunakan URL asli", { icon: "⚠️" });
+        clearTimeout(timeout);
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          if (upData.url) r2CoverUrl = upData.url;
+        } else if (!r2Warned.current) {
+          r2Warned.current = true;
+          toast("Cover disimpan dari sumber asli (R2 belum siap)", { icon: "💡" });
         }
       } catch {
-        r2CoverUrl = result.coverUrl;
-        toast("Upload R2 gagal — menggunakan URL asli", { icon: "⚠️" });
+        // R2 unavailable — use original URL silently
+        if (!r2Warned.current) {
+          r2Warned.current = true;
+          toast("Cover dari sumber asli", { icon: "📚", duration: 2000 });
+        }
       }
     }
 
