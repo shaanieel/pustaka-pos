@@ -47,9 +47,12 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
+          // Ambil item dengan prefix terpanjang yang match → no more double-active
           const isActive =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+            navItems
+              .filter((i) => pathname.startsWith(i.href))
+              .sort((a, b) => b.href.length - a.href.length)[0]
+              ?.href === item.href;
 
           return (
             <Link
