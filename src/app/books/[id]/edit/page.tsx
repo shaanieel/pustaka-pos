@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
+import { deleteCoverFromR2 } from "@/lib/compress";
 
 export default function EditBookPage() {
   const router = useRouter();
@@ -141,6 +142,9 @@ export default function EditBookPage() {
 
   async function handleDelete() {
     try {
+      // Hapus cover dari R2 dulu
+      if (form.cover_url) await deleteCoverFromR2(form.cover_url);
+
       const { error } = await supabase.from("books").delete().eq("id", bookId);
       if (error) throw error;
       toast.success("Buku dihapus");

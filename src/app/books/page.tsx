@@ -8,6 +8,7 @@ import { Book } from "@/types";
 import { BookCard } from "@/components/BookCard";
 import { SearchBar } from "@/components/SearchBar";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { deleteCoverFromR2 } from "@/lib/compress";
 import { Plus, BookOpen } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -50,6 +51,10 @@ export default function BooksPage() {
 
   async function handleDelete(id: string) {
     try {
+      // Hapus cover dari R2 dulu
+      const { data: book } = await supabase.from("books").select("cover_url").eq("id", id).single();
+      if (book?.cover_url) await deleteCoverFromR2(book.cover_url);
+
       const { error } = await supabase.from("books").delete().eq("id", id);
       if (error) throw error;
       toast.success("Buku berhasil dihapus");

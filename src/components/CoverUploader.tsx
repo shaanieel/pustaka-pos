@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Camera, Upload, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { compressImage, deleteCoverFromR2 } from "@/lib/compress";
 
 interface CoverUploaderProps {
   currentCover: string;
@@ -10,7 +11,11 @@ interface CoverUploaderProps {
   filename?: string;
 }
 
-export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUploaderProps) {
+export function CoverUploader({
+  currentCover,
+  onCoverChange,
+  filename,
+}: CoverUploaderProps) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,8 +35,17 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
       onCoverChange(currentCover, true);
 
       try {
+        // 1. Kompres gambar (maks 200KB)
+        const compressed = await compressImage(file, 200);
+
+        // 2. Hapus foto lama dari R2 (kalau ada)
+        if (currentCover && currentCover.startsWith("/api/cover/")) {
+          await deleteCoverFromR2(currentCover);
+        }
+
+        // 3. Upload foto baru ke R2
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", compressed, "cover.jpg");
         if (filename) formData.append("filename", filename);
 
         const res = await fetch("/api/upload-cover", {
@@ -46,6 +60,9 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
         }
 
         if (data.url) {
+          console.log(
+            `Upload selesai: ${Math.round(compressed.size / 1024)}KB dari ${Math.round(file.size / 1024)}KB`
+          );
           onCoverChange(data.url, false);
           toast.success(`Cover dari ${source} diupload!`);
         } else {
@@ -60,6 +77,14 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
     },
     [currentCover, filename, onCoverChange]
   );
+
+  // Handle hapus cover (X button)
+  const handleClear = useCallback(async () => {
+    if (currentCover && currentCover.startsWith("/api/cover/")) {
+      await deleteCoverFromR2(currentCover);
+    }
+    onCoverChange("", false);
+  }, [currentCover, onCoverChange]);
 
   // Handle paste from clipboard
   const handlePaste = useCallback(
@@ -119,8 +144,8 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
           dragOver
             ? "border-brand-500 bg-brand-50"
             : currentCover
-            ? "border-transparent"
-            : "border-brand-200 bg-brand-50/50"
+              ? "border-transparent"
+              : "border-brand-200 bg-brand-50/50"
         }`}
         onDragOver={(e) => {
           e.preventDefault();
@@ -142,7 +167,7 @@ export function CoverUploader({ currentCover, onCoverChange, filename }: CoverUp
             {/* Clear button */}
             <button
               type="button"
-              onClick={() => onCoverChange("", false)}
+              onClick={handleClear}
               className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition"
               title="Hapus cover"
             >
