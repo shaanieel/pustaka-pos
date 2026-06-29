@@ -10,6 +10,7 @@ import {
   PlusCircle,
   BookMarked,
   ReceiptText,
+  PackageOpen,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/books/add", label: "Tambah Buku", icon: PlusCircle },
   { href: "/orders", label: "Riwayat Pesanan", icon: ReceiptText },
   { href: "/orders/new", label: "Pesanan Baru", icon: ShoppingCart },
+  { href: "/stock/in", label: "Stok Masuk", icon: PackageOpen },
   { href: "/customers", label: "Pelanggan", icon: Users },
 ];
 

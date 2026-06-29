@@ -3,13 +3,15 @@
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, ScanLine } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ScannerButton } from "@/components/ScannerButton";
+import { CoverUploader } from "@/components/CoverUploader";
 
 export default function EditBookPage() {
   const router = useRouter();
@@ -23,6 +25,7 @@ export default function EditBookPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
 
   useEffect(() => {
     loadBook();
@@ -53,6 +56,56 @@ export default function EditBookPage() {
       setLoading(false);
     }
   }
+
+  // ── SCAN BARCODE HANDLER (Model 1: Edit Buku) ──
+  const handleScannedISBN = useCallback(async (isbn: string) => {
+    toast.loading(`Mencari buku ISBN: ${isbn}...`, { id: "scan-search" });
+    try {
+      const res = await fetch(`/api/search-books?isbn=${encodeURIComponent(isbn)}`);
+      const data = await res.json();
+      toast.dismiss("scan-search");
+
+      const result = data.results?.[0];
+      if (result) {
+        toast.success(`${result.title} — data dari Google Books diterapkan!`);
+
+        let r2CoverUrl = result.coverUrl || "";
+        if (result.coverUrl) {
+          try {
+            const upRes = await fetch("/api/upload-cover", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageUrl: result.coverUrl, filename: isbn }),
+            });
+            if (upRes.ok) {
+              const upData = await upRes.json();
+              if (upData.url) r2CoverUrl = upData.url;
+            }
+          } catch {}
+        }
+
+        setForm((prev) => ({
+          ...prev,
+          title: result.title,
+          author: result.author,
+          isbn: result.isbn || isbn,
+          publisher: result.publisher || prev.publisher,
+          cover_url: r2CoverUrl || prev.cover_url,
+          year: result.year?.toString() || prev.year,
+        }));
+      } else {
+        toast("Buku tidak ditemukan di Google Books. ISBN tetap terdaftar.", {
+          icon: "📚",
+          duration: 5000,
+        });
+        setForm((prev) => ({ ...prev, isbn: isbn }));
+      }
+    } catch {
+      toast.dismiss("scan-search");
+      toast.error("Gagal mencari buku. Coba lagi.");
+      setForm((prev) => ({ ...prev, isbn: isbn }));
+    }
+  }, []);
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -115,20 +168,22 @@ export default function EditBookPage() {
           <h1 className="page-title">Edit Buku</h1>
           <p className="page-subtitle">Perbarui informasi buku</p>
         </div>
+        <ScannerButton onScan={handleScannedISBN} label="Scan ISBN" size="sm" />
         <button onClick={() => setShowDelete(true)} className="btn-ghost text-red-500 hover:bg-red-50">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
-        {/* Cover preview */}
-        {form.cover_url && (
-          <div className="flex justify-center">
-            <div className="w-24 h-36 rounded-lg overflow-hidden shadow-md border border-brand-100">
-              <img src={form.cover_url} alt={form.title} className="w-full h-full object-cover" />
-            </div>
-          </div>
-        )}
+        {/* Cover Uploader */}
+        <CoverUploader
+          currentCover={form.cover_url}
+          filename={form.isbn || form.title.replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40)}
+          onCoverChange={(url, isUploading) => {
+            updateField("cover_url", url);
+            setCoverUploading(isUploading);
+          }}
+        />
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
@@ -148,8 +203,11 @@ export default function EditBookPage() {
           </div>
           <div>
             <label className="label">ISBN</label>
-            <input type="text" className="input-field" value={form.isbn}
-              onChange={(e) => updateField("isbn", e.target.value)} />
+            <div className="flex gap-2">
+              <input type="text" className="input-field flex-1" value={form.isbn}
+                onChange={(e) => updateField("isbn", e.target.value)} />
+              <ScannerButton onScan={handleScannedISBN} variant="icon" />
+            </div>
           </div>
           <div>
             <label className="label">Harga (Rp) *</label>
@@ -177,15 +235,10 @@ export default function EditBookPage() {
             <input type="text" className="input-field" value={form.publisher}
               onChange={(e) => updateField("publisher", e.target.value)} />
           </div>
-          <div className="sm:col-span-2">
-            <label className="label">URL Cover</label>
-            <input type="url" className="input-field" value={form.cover_url}
-              onChange={(e) => updateField("cover_url", e.target.value)} />
-          </div>
         </div>
         <div className="flex gap-3 pt-2">
           <Link href="/books" className="btn-secondary flex-1">Batal</Link>
-          <button type="submit" disabled={saving} className="btn-primary flex-1">
+          <button type="submit" disabled={saving || coverUploading} className="btn-primary flex-1">
             <Save className="w-4 h-4" />
             {saving ? "Menyimpan..." : "Simpan"}
           </button>

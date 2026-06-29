@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { Book, Customer, CartItem, Order, OrderItem } from "@/types";
 import { SearchBar } from "@/components/SearchBar";
 import { Receipt } from "@/components/Receipt";
+import { ScannerButton } from "@/components/ScannerButton";
 import { formatRupiah } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
   Search,
   Wallet,
   CheckCircle2,
+  ScanLine,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -50,6 +52,51 @@ export default function NewOrderPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const changeAmount = Math.max(0, paymentAmount - (savedOrder?.final_amount || 0));
+
+  // ── SCAN BARCODE HANDLER (Model 2: Kasir) ──
+  const handleScannedISBN = useCallback(async (isbn: string) => {
+    toast.loading(`Mencari buku ISBN: ${isbn}...`, { id: "scan-kasir" });
+    try {
+      const { data, error } = await supabase
+        .from("books")
+        .select("*")
+        .eq("isbn", isbn)
+        .single();
+
+      toast.dismiss("scan-kasir");
+
+      if (error || !data) {
+        // Coba cari di Google Books sebagai fallback (tapi ga auto-add — user harus ke tambah buku dulu)
+        toast.error(`Buku dengan ISBN ${isbn} tidak ditemukan di database`, { duration: 4000 });
+        return;
+      }
+
+      const book = data as Book;
+
+      // Auto-add ke cart
+      const existing = cart.find((c) => c.book.id === book.id);
+      if (existing) {
+        if (existing.quantity >= book.stock) {
+          toast.error("Stok tidak mencukupi");
+          return;
+        }
+        setCart((prev) =>
+          prev.map((c) => (c.book.id === book.id ? { ...c, quantity: c.quantity + 1 } : c))
+        );
+      } else {
+        if (book.stock <= 0) {
+          toast.error("Stok habis");
+          return;
+        }
+        setCart((prev) => [...prev, { book, quantity: 1 }]);
+      }
+
+      toast.success(`${book.title} — ditambahkan ke keranjang!`, { duration: 2000 });
+    } catch {
+      toast.dismiss("scan-kasir");
+      toast.error("Gagal mencari buku");
+    }
+  }, [cart]);
 
   // Search books
   const searchBooks = useCallback(async () => {
@@ -259,10 +306,11 @@ export default function NewOrderPage() {
           <Link href="/orders" className="btn-ghost p-2 -ml-2">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="page-title">Pesanan Baru</h1>
             <p className="page-subtitle">Tambahkan buku ke keranjang</p>
           </div>
+          <ScannerButton onScan={handleScannedISBN} label="Scan ISBN" size="sm" />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-5">
@@ -271,11 +319,16 @@ export default function NewOrderPage() {
             {/* Book Search */}
             <div className="card p-4 space-y-3">
               <label className="label">Cari Buku</label>
-              <SearchBar
-                value={bookSearch}
-                onChange={setBookSearch}
-                placeholder="Ketik judul, penulis, atau ISBN..."
-              />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <SearchBar
+                    value={bookSearch}
+                    onChange={setBookSearch}
+                    placeholder="Ketik judul, penulis, atau ISBN..."
+                  />
+                </div>
+                <ScannerButton onScan={handleScannedISBN} variant="icon" />
+              </div>
               {books.length > 0 && (
                 <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-64 overflow-y-auto">
                   {books.map((b) => (
@@ -306,7 +359,7 @@ export default function NewOrderPage() {
 
               {cart.length === 0 ? (
                 <p className="text-sm text-brand-400 py-8 text-center">
-                  Belum ada buku. Cari dan tambahkan di atas.
+                  Belum ada buku. Cari dan tambahkan di atas, atau scan barcode.
                 </p>
               ) : (
                 <div className="space-y-2">

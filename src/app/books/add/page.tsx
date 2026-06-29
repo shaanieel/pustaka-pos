@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { BookSearchResult } from "@/types";
 import { BookSearchCard } from "@/components/BookSearchCard";
+import { ScannerButton } from "@/components/ScannerButton";
+import { CoverUploader } from "@/components/CoverUploader";
 import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -29,8 +31,74 @@ export default function AddBookPage() {
     category: "", publisher: "", cover_url: "", year: "",
   });
   const [saving, setSaving] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
 
-  // Search handler
+  // ── SCAN BARCODE HANDLER (Model 1: Master Barang) ──
+  const handleScannedISBN = useCallback(async (isbn: string) => {
+    toast.loading(`Mencari buku ISBN: ${isbn}...`, { id: "scan-search" });
+    try {
+      const res = await fetch(`/api/search-books?isbn=${encodeURIComponent(isbn)}`);
+      const data = await res.json();
+      toast.dismiss("scan-search");
+
+      const result = data.results?.[0];
+      if (result) {
+        // ISBN ketemu di Google Books → auto-fill form
+        toast.success(`${result.title} — tinggal isi harga & simpan!`);
+
+        // Upload cover dari Google Books ke R2
+        let r2CoverUrl = result.coverUrl || "";
+        if (result.coverUrl) {
+          try {
+            const upRes = await fetch("/api/upload-cover", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                imageUrl: result.coverUrl,
+                filename: isbn,
+              }),
+            });
+            if (upRes.ok) {
+              const upData = await upRes.json();
+              if (upData.url) r2CoverUrl = upData.url;
+            }
+          } catch {
+            // fallback: use Google Books URL
+          }
+        }
+
+        setForm({
+          title: result.title,
+          author: result.author,
+          isbn: result.isbn || isbn,
+          price: "",
+          stock: "10",
+          category: "",
+          publisher: result.publisher || "",
+          cover_url: r2CoverUrl,
+          year: result.year?.toString() || "",
+        });
+      } else {
+        // ISBN TIDAK ketemu → ISBN tetap terisi, user isi manual
+        toast("Buku tidak ditemukan di Google Books. ISBN tetap terdaftar, silakan isi manual.", {
+          icon: "📚",
+          duration: 5000,
+        });
+        setForm((prev) => ({ ...prev, isbn: isbn, cover_url: "" }));
+      }
+
+      // Scroll ke form
+      setTimeout(() => {
+        document.getElementById("manual-form")?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    } catch {
+      toast.dismiss("scan-search");
+      toast.error("Gagal mencari buku. Coba lagi.");
+      setForm((prev) => ({ ...prev, isbn: isbn }));
+    }
+  }, []);
+
+  // ── KEYWORD SEARCH HANDLER ──
   async function handleSearch(e?: React.FormEvent) {
     e?.preventDefault();
     const q = searchQ.trim();
@@ -58,10 +126,9 @@ export default function AddBookPage() {
     }
   }
 
-  // Select a search result → upload cover to R2 → fill form
+  // ── SELECT A SEARCH RESULT ──
   const r2Warned = useRef(false);
   async function handleSelect(result: BookSearchResult) {
-    // Upload cover to our R2 storage (non-blocking — fallback gracefully)
     let r2CoverUrl = result.coverUrl || "";
     if (result.coverUrl) {
       try {
@@ -85,7 +152,6 @@ export default function AddBookPage() {
           toast("Cover disimpan dari sumber asli (R2 belum siap)", { icon: "💡" });
         }
       } catch {
-        // R2 unavailable — use original URL silently
         if (!r2Warned.current) {
           r2Warned.current = true;
           toast("Cover dari sumber asli", { icon: "📚", duration: 2000 });
@@ -105,7 +171,6 @@ export default function AddBookPage() {
       year: result.year?.toString() || "",
     });
 
-    // Scroll ke form
     setTimeout(() => {
       document.getElementById("manual-form")?.scrollIntoView({ behavior: "smooth" });
     }, 100);
@@ -113,7 +178,7 @@ export default function AddBookPage() {
     toast.success(`${result.title} — tinggal isi harga & simpan!`, { duration: 3000 });
   }
 
-  // Save to Supabase
+  // ── SAVE TO SUPABASE ──
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title || !form.author || !form.price) {
@@ -158,10 +223,12 @@ export default function AddBookPage() {
         <Link href="/books" className="btn-ghost p-2 -ml-2">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="page-title">Tambah Buku</h1>
-          <p className="page-subtitle">Cari buku dari Google Books / Open Library, atau isi manual</p>
+          <p className="page-subtitle">Scan barcode, cari di Google Books, atau isi manual</p>
         </div>
+        {/* Scan button in header */}
+        <ScannerButton onScan={handleScannedISBN} label="Scan ISBN" size="sm" />
       </div>
 
       {/* SEARCH SECTION */}
@@ -174,7 +241,6 @@ export default function AddBookPage() {
             onChange={(e) => setSearchQ(e.target.value)}
             placeholder="Ketik judul buku... (contoh: Atomic Habits)"
             className="input-field flex-1"
-            autoFocus
           />
           <button type="submit" disabled={searching} className="btn-primary">
             {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -182,7 +248,6 @@ export default function AddBookPage() {
           </button>
         </form>
 
-        {/* Search tips */}
         {!searched && (
           <div className="text-xs text-brand-400 space-y-1">
             <p>🔍 Coba cari: <button onClick={() => { setSearchQ("Laut Bercerita"); setTimeout(() => handleSearch(), 50); }} className="text-brand-600 underline">Laut Bercerita</button>, <button onClick={() => { setSearchQ("Atomic Habits"); setTimeout(() => handleSearch(), 50); }} className="text-brand-600 underline">Atomic Habits</button>, <button onClick={() => { setSearchQ("Bumi Manusia"); setTimeout(() => handleSearch(), 50); }} className="text-brand-600 underline">Bumi Manusia</button></p>
@@ -190,7 +255,6 @@ export default function AddBookPage() {
           </div>
         )}
 
-        {/* Results */}
         {searching && (
           <div className="flex items-center gap-3 text-brand-500 py-4">
             <Loader2 className="w-5 h-5 animate-spin" /> Mencari di {source ? source === "google" ? "Google Books" : "Open Library" : "database"}...
@@ -224,15 +288,15 @@ export default function AddBookPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Cover preview */}
-          {form.cover_url && (
-            <div className="flex justify-center">
-              <div className="w-24 h-36 rounded-lg overflow-hidden shadow-md border border-brand-100">
-                <img src={form.cover_url} alt={form.title} className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              </div>
-            </div>
-          )}
+          {/* Cover Uploader (gantiin URL input + preview lama) */}
+          <CoverUploader
+            currentCover={form.cover_url}
+            filename={form.isbn || form.title.replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40)}
+            onCoverChange={(url, isUploading) => {
+              updateField("cover_url", url);
+              setCoverUploading(isUploading);
+            }}
+          />
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
@@ -252,8 +316,11 @@ export default function AddBookPage() {
             </div>
             <div>
               <label className="label">ISBN</label>
-              <input type="text" className="input-field" placeholder="978-xxx-xxx-xxxx"
-                value={form.isbn} onChange={(e) => updateField("isbn", e.target.value)} />
+              <div className="flex gap-2">
+                <input type="text" className="input-field flex-1" placeholder="978-xxx-xxx-xxxx"
+                  value={form.isbn} onChange={(e) => updateField("isbn", e.target.value)} />
+                <ScannerButton onScan={handleScannedISBN} variant="icon" />
+              </div>
             </div>
             <div>
               <label className="label">Penerbit</label>
@@ -285,16 +352,11 @@ export default function AddBookPage() {
                 <option value="Lainnya">Lainnya</option>
               </select>
             </div>
-            <div className="sm:col-span-2">
-              <label className="label">URL Cover (otomatis dari pencarian)</label>
-              <input type="url" className="input-field text-sm" placeholder="https://..."
-                value={form.cover_url} onChange={(e) => updateField("cover_url", e.target.value)} />
-            </div>
           </div>
 
           <div className="flex gap-3 pt-2">
             <Link href="/books" className="btn-secondary flex-1">Batal</Link>
-            <button type="submit" disabled={saving} className="btn-primary flex-1">
+            <button type="submit" disabled={saving || coverUploading} className="btn-primary flex-1">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {saving ? "Menyimpan..." : "Simpan Buku"}
             </button>

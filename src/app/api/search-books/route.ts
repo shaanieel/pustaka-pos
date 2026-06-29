@@ -1,5 +1,7 @@
-// GET /api/search-books?q=atomic+habits
-// Fallback: Google Books → Open Library
+// GET /api/search-books
+// Two modes:
+//   ?q=atomic+habits    → search by keyword (Google Books → Open Library fallback)
+//   ?isbn=9786020322476 → direct lookup by ISBN (Google Books only, most accurate)
 export const runtime = "edge";
 
 const GOOGLE_BOOKS_KEY = process.env.GOOGLE_BOOKS_API_KEY || "";
@@ -7,7 +9,31 @@ const GOOGLE_BOOKS_KEY = process.env.GOOGLE_BOOKS_API_KEY || "";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q")?.trim();
+  const isbn = searchParams.get("isbn")?.trim();
 
+  // ISBN lookup mode — most accurate
+  if (isbn && isbn.length >= 10) {
+    if (GOOGLE_BOOKS_KEY) {
+      try {
+        const gRes = await fetch(
+          `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(isbn)}&maxResults=1&key=${GOOGLE_BOOKS_KEY}`
+        );
+        if (gRes.ok) {
+          const data = await gRes.json();
+          const results = (data.items || []).map(parseGoogleBook);
+          if (results.length > 0) {
+            return Response.json({ results, source: "google", mode: "isbn" });
+          }
+        }
+      } catch {
+        // fallthrough
+      }
+    }
+    // ISBN not found in Google Books
+    return Response.json({ results: [], source: null, mode: "isbn" });
+  }
+
+  // Keyword search mode (original behavior)
   if (!q || q.length < 2) {
     return Response.json({ results: [], source: null });
   }
@@ -58,7 +84,6 @@ function parseGoogleBook(item: any) {
 
   let coverUrl = null;
   const il = vi.imageLinks || {};
-  // prefer extraLarge → large → medium → small → thumbnail
   coverUrl = il.extraLarge || il.large || il.medium || il.small || il.thumbnail || null;
   if (coverUrl && coverUrl.startsWith("http:")) {
     coverUrl = coverUrl.replace("http:", "https:");
