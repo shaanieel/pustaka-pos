@@ -18,7 +18,20 @@ export default function BooksPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Load distinct categories from ALL books in DB (not just the loaded ones)
+  useEffect(() => {
+    supabase
+      .from("books")
+      .select("category")
+      .not("category", "is", null)
+      .then(({ data }) => {
+        const cats = Array.from(new Set((data || []).map((b) => b.category!).filter(Boolean))) as string[];
+        setAllCategories(cats.sort());
+      });
+  }, []);
 
   const loadBooks = useCallback(async () => {
     setLoading(true);
@@ -64,8 +77,6 @@ export default function BooksPage() {
     }
   }
 
-  const categories = Array.from(new Set(books.map((b) => b.category).filter(Boolean)));
-
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -87,15 +98,15 @@ export default function BooksPage() {
             placeholder="Cari judul, penulis, atau ISBN..."
           />
         </div>
-        {categories.length > 0 && (
+        {allCategories.length > 0 && (
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="input-field sm:max-w-[180px]"
           >
             <option value="">Semua Kategori</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat!}>{cat}</option>
+            {allCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
         )}
