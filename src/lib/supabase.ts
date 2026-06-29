@@ -2,22 +2,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let _supabase: SupabaseClient | null = null;
 
+const SUPABASE_URL = "https://qzlsccxuokfzwdlqrohx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6bHNjY3h1b2tmendkbHFyb2h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjI2MDcsImV4cCI6MjA5ODIzODYwN30.CkJ5euA6wQFO0LcQawElxx6haSyA11ARcYjsxPloI7s";
+
 function getSupabase(): SupabaseClient {
   if (!_supabase) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      if (typeof window !== "undefined") {
-        throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY env vars");
-      }
-      // Server-side build: return a dummy that never connects
-      return createClient("https://placeholder.supabase.co", "placeholder-key", {
-        auth: { persistSession: false },
-      });
-    }
-
-    _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: false,
       },
@@ -34,7 +24,7 @@ export const supabase = new Proxy({} as SupabaseClient, {
 });
 
 export function isSupabaseReady(): boolean {
-  return !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  return true;
 }
 
 export async function fetchData<T>(
