@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
+import { toPng, toJpeg } from "html-to-image";
 import { Order, OrderItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
-import { Printer, X } from "lucide-react";
+import { Printer, Download, FileImage, FileText, X } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface ReceiptProps {
   order: Order;
@@ -14,6 +16,14 @@ interface ReceiptProps {
   changeAmount: number;
   onClose: () => void;
 }
+
+const STORE = {
+  name: "BUNAYYA PUTRA",
+  subtitle: "Toko Buku & Alat Tulis",
+  address: "JL. MELATI NO. 23, KEL. SUKAMAJU",
+  city: "PEKANBARU — RIAU",
+  phone: "TELP. 0812-XXXX-XXXX",
+};
 
 export function Receipt({
   order,
@@ -26,300 +36,322 @@ export function Receipt({
 }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
 
-  function handlePrint() {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+  const downloadImage = useCallback(async (format: "jpg" | "png") => {
+    if (!receiptRef.current) return;
+    try {
+      const dataUrl =
+        format === "png"
+          ? await toPng(receiptRef.current, { quality: 1, pixelRatio: 2 })
+          : await toJpeg(receiptRef.current, { quality: 0.95, pixelRatio: 2 });
 
-    const logoBlock = `<img src="/logo.png" alt="Bunayya Putra" style="width:100px;height:auto;margin:0 auto 8px;display:block;" />`;
+      const link = document.createElement("a");
+      link.download = `struk-${order.id.slice(0, 8)}.${format}`;
+      link.href = dataUrl;
+      link.click();
+      toast.success(`Struk terdownload sebagai ${format.toUpperCase()}`);
+    } catch {
+      toast.error("Gagal download struk");
+    }
+  }, [order.id]);
 
-    printWindow.document.write(`
+  const downloadPDF = useCallback(() => {
+    if (!receiptRef.current) return;
+    // Clone the receipt into a print-optimized window
+    const cloned = receiptRef.current.cloneNode(true) as HTMLElement;
+    const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Struk Pembayaran — Bunayya Putra</title>
+        <title>Struk — ${STORE.name}</title>
         <style>
-          @page { margin: 0; size: 80mm auto; }
+          @page { margin: 12px; size: auto; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            width: 80mm;
-            padding: 10px 8px;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-size: 13px;
             color: #022C22;
             background: #fff;
+            padding: 16px;
+            max-width: 380px;
+            margin: 0 auto;
           }
-          .center { text-align: center; }
-          .bold { font-weight: 700; }
-          .divider { border-top: 1px dashed #022C22; margin: 6px 0; }
-          .divider-solid { border-top: 1px solid #022C22; margin: 6px 0; }
-          table { width: 100%; border-collapse: collapse; font-size: 10px; }
-          th, td { padding: 2px 0; text-align: left; }
-          th { border-bottom: 1px dashed #022C22; }
-          .right { text-align: right; }
-          .total-row td { border-top: 1px dashed #022C22; font-weight: 700; padding-top: 4px; }
-          .store-name { font-size: 14px; font-weight: 800; letter-spacing: 1px; }
-          .store-info { font-size: 9px; color: #555; }
-          .col-qty { text-align: center; }
-          .col-price { text-align: right; }
+          body * { font-family: inherit !important; }
+          img[alt="logo"] { width: 64px; height: auto; display: block; margin: 0 auto 12px; }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-brand-900 { color: #022C22; }
+          .text-brand-700 { color: #047857; }
+          .text-brand-500 { color: #10B981; }
+          .text-brand-400 { color: #34D399; }
+          .text-red-500 { color: #EF4444; }
+          .font-extrabold { font-weight: 800; }
+          .font-bold { font-weight: 700; }
+          .font-semibold { font-weight: 600; }
+          .text-xs { font-size: 11px; }
+          .text-sm { font-size: 12px; }
+          .text-base { font-size: 14px; }
+          .text-lg { font-size: 16px; }
+          .text-xl { font-size: 18px; }
+          .border-dashed { border-style: dashed; }
+          .border-t-2 { border-top-width: 2px; }
+          .border-t { border-top-width: 1px; }
+          .border-brand-200 { border-color: #A7F3D0; }
+          .pt-2 { padding-top: 8px; }
+          .pt-3 { padding-top: 12px; }
+          .pt-4 { padding-top: 16px; }
+          .pb-4 { padding-bottom: 16px; }
+          .mb-3 { margin-bottom: 12px; }
+          .mb-4 { margin-bottom: 16px; }
+          .mt-3 { margin-top: 12px; }
+          .mt-6 { margin-top: 24px; }
+          .space-y-1 > * + * { margin-top: 4px; }
+          .space-y-1\.5 > * + * { margin-top: 6px; }
+          .flex { display: flex; }
+          .justify-between { justify-content: space-between; }
+          .grid { display: grid; }
+          .grid-cols-4 { grid-template-columns: 32px 1fr 62px 62px; }
+          .gap-1 { gap: 4px; }
+          .tracking-widest { letter-spacing: 0.1em; }
+          .tracking-wider { letter-spacing: 0.05em; }
+          .uppercase { text-transform: uppercase; }
+          .italic { font-style: italic; }
+          .leading-relaxed { line-height: 1.625; }
         </style>
       </head>
-      <body>
-        ${logoBlock}
-        <div class="center store-name">BUNAYYA PUTRA</div>
-        <div class="center store-info">Kasir Toko Buku</div>
-        <div class="center store-info">${order.created_at ? new Date(order.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}</div>
-        <div class="divider"></div>
-        <div style="margin:4px 0;font-size:10px;">
-          <div>No: ${order.id.slice(0, 8).toUpperCase()}</div>
-          <div>Kasir: ${cashierName}</div>
-          <div>Pelanggan: ${customerName}</div>
-        </div>
-        <div class="divider"></div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:28px;">Qty</th>
-              <th>Barang</th>
-              <th class="right" style="width:50px;">Brutto</th>
-              <th class="right" style="width:48px;">Netto</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map((item, i) => {
-              const qty = item.quantity;
-              const price = item.price_at_time;
-              const subtotal = item.subtotal;
-              const discountAmount = order.discount > 0 && i === items.length - 1
-                ? Math.round(order.discount / items.length)
-                : 0;
-              const netto = subtotal - discountAmount;
-              return `
-              <tr>
-                <td class="col-qty">${qty}x</td>
-                <td>${item.book_title.length > 22 ? item.book_title.slice(0, 20) + ".." : item.book_title}</td>
-                <td class="col-price">${formatRupiah(subtotal).replace("Rp", "")}</td>
-                <td class="col-price">${formatRupiah(netto || subtotal).replace("Rp", "")}</td>
-              </tr>
-            `}).join("")}
-          </tbody>
-        </table>
-        <div class="divider"></div>
-        <table>
-          <tr>
-            <td>Brutto (Total Kotor)</td>
-            <td class="right bold">${formatRupiah(order.total_amount).replace("Rp", "")}</td>
-          </tr>
-          ${order.discount > 0 ? `
-          <tr>
-            <td>Diskon</td>
-            <td class="right bold">-${formatRupiah(order.discount).replace("Rp", "")}</td>
-          </tr>
-          ` : ""}
-          <tr class="total-row">
-            <td style="font-size:13px;padding-top:6px;">TOTAL (Netto)</td>
-            <td class="right bold" style="font-size:13px;padding-top:6px;">${formatRupiah(order.final_amount).replace("Rp", "")}</td>
-          </tr>
-        </table>
-        <div class="divider-solid"></div>
-        <table>
-          <tr>
-            <td>Dibayar</td>
-            <td class="right">${formatRupiah(paymentAmount).replace("Rp", "")}</td>
-          </tr>
-          <tr>
-            <td>Kembali</td>
-            <td class="right bold">${formatRupiah(changeAmount).replace("Rp", "")}</td>
-          </tr>
-        </table>
-        <div class="divider"></div>
-        <div class="center" style="margin-top:6px;font-size:9px;color:#555;">
-          Terima kasih telah berbelanja<br/>
-          Barang yang sudah dibeli tidak dapat dikembalikan<br/>
-          <div style="margin-top:4px;">~ Bunayya Putra ~</div>
-        </div>
-      </body>
+      <body>${cloned.outerHTML}</body>
       </html>
-    `);
+    `;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(html);
     printWindow.document.close();
     setTimeout(() => {
       printWindow.focus();
       printWindow.print();
-    }, 300);
-  }
+    }, 400);
+  }, [order.id]);
+
+  // For print from history: paymentAmount may be 0 (unknown); handle gracefully
+  const paidAmount =
+    paymentAmount > 0 ? paymentAmount : order.final_amount;
+  const change =
+    paymentAmount > 0 ? changeAmount : 0;
+
+  const dateFormatted = order.created_at
+    ? new Date(order.created_at).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "";
+  const timeFormatted = order.created_at
+    ? new Date(order.created_at).toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-scale-in">
-      <div className="bg-white rounded-3xl shadow-float max-w-sm w-full max-h-[90vh] overflow-y-auto">
-        {/* Receipt Preview */}
-        <div
-          ref={receiptRef}
-          className="p-6 font-mono text-sm"
-        >
-          {/* Close */}
-          <div className="flex justify-end -mt-2 -mr-2 mb-2">
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Header */}
-          <div className="text-center border-b-2 border-dashed border-brand-200 pb-4 mb-4">
-            <img
-              src="/logo.png"
-              alt="Bunayya Putra"
-              className="w-20 h-auto mx-auto mb-2 opacity-90"
-            />
-            <h2 className="text-lg font-extrabold text-brand-900 tracking-widest">
-              BUNAYYA PUTRA
-            </h2>
-            <p className="text-[11px] text-brand-500 font-medium">
-              Kasir Toko Buku
-            </p>
-            <p className="text-[10px] text-brand-400 mt-1">
-              {order.created_at
-                ? new Date(order.created_at).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : ""}
-            </p>
-          </div>
-
-          {/* Info */}
-          <div className="text-[11px] text-brand-700 space-y-0.5 mb-4">
-            <div className="flex justify-between">
-              <span className="text-brand-400">No</span>
-              <span className="font-semibold">
-                #{order.id.slice(0, 8).toUpperCase()}
-              </span>
+      <div className="bg-white rounded-3xl shadow-float w-full max-w-md max-h-[93vh] overflow-hidden flex flex-col">
+        {/* Receipt content — scrollable */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div
+            ref={receiptRef}
+            id="receipt-content"
+            className="p-6 font-sans bg-white"
+          >
+            {/* Close button (only on screen, not in export) */}
+            <div className="flex justify-end -mt-2 -mr-2 mb-3 no-print">
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="flex justify-between">
-              <span className="text-brand-400">Kasir</span>
-              <span className="font-semibold">{cashierName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-brand-400">Pelanggan</span>
-              <span className="font-semibold">{customerName}</span>
-            </div>
-          </div>
 
-          {/* Table Header */}
-          <div className="border-b-2 border-dashed border-brand-200 pb-1.5 mb-1">
-            <div className="grid grid-cols-[32px_1fr_60px_60px] gap-1 text-[10px] font-bold text-brand-500 uppercase tracking-wider">
-              <span className="text-center">Qty</span>
-              <span>Barang</span>
-              <span className="text-right">Brutto</span>
-              <span className="text-right">Netto</span>
+            {/* ═══════════ HEADER ═══════════ */}
+            <div className="text-center border-b-2 border-dashed border-brand-200 pb-4 mb-4">
+              <img
+                src="/logo.png"
+                alt="logo"
+                className="w-16 h-auto mx-auto mb-3"
+              />
+              <h2 className="text-xl font-extrabold text-brand-900 tracking-widest uppercase">
+                {STORE.name}
+              </h2>
+              <p className="text-xs font-semibold text-brand-600 mt-0.5">
+                {STORE.subtitle}
+              </p>
+              <p className="text-[10px] text-brand-400 mt-0.5 uppercase tracking-wider leading-relaxed">
+                {STORE.address}
+                <br />
+                {STORE.city}
+                <br />
+                {STORE.phone}
+              </p>
+              <p className="text-[11px] font-semibold text-brand-500 mt-2">
+                {dateFormatted} &middot; {timeFormatted}
+              </p>
             </div>
-          </div>
 
-          {/* Items */}
-          <div className="space-y-1 mb-3">
-            {items.map((item, i) => {
-              const totalBrutto = item.subtotal;
-              // For simplicity, netto per item = subtotal (discount shown separately)
-              const totalNetto = item.subtotal - (order.discount > 0 && i === items.length - 1 ? Math.min(order.discount, item.subtotal) : 0);
-              return (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-[32px_1fr_60px_60px] gap-1 text-[11px]"
-                >
-                  <span className="text-center text-brand-500">
-                    {item.quantity}x
-                  </span>
-                  <span className="text-brand-900 truncate font-medium">
-                    {item.book_title}
-                  </span>
-                  <span className="text-right text-brand-600 font-medium">
-                    {formatRupiah(totalBrutto).replace("Rp", "")}
-                  </span>
-                  <span className="text-right text-brand-800 font-semibold">
-                    {formatRupiah(totalNetto).replace("Rp", "")}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Totals */}
-          <div className="border-t-2 border-dashed border-brand-200 pt-3 space-y-1.5">
-            <div className="flex justify-between text-sm">
-              <span className="text-brand-500">Brutto (Total Kotor)</span>
-              <span className="font-bold text-brand-800">
-                {formatRupiah(order.total_amount)}
-              </span>
-            </div>
-            {order.discount > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-500">Diskon</span>
-                <span className="font-bold text-red-500">
-                  -{formatRupiah(order.discount)}
+            {/* ═══════════ INFO ═══════════ */}
+            <div className="text-xs text-brand-700 space-y-1 mb-4">
+              <div className="flex justify-between">
+                <span className="text-brand-400">No. Faktur</span>
+                <span className="font-bold text-brand-800">
+                  #{order.id.slice(0, 8).toUpperCase()}
                 </span>
               </div>
-            )}
-            <div className="flex justify-between border-t-2 border-dashed border-brand-200 pt-2">
-              <span className="text-base font-black text-brand-900">
-                TOTAL (Netto)
-              </span>
-              <span className="text-lg font-black text-brand-700">
-                {formatRupiah(order.final_amount)}
-              </span>
+              <div className="flex justify-between">
+                <span className="text-brand-400">Kasir</span>
+                <span className="font-semibold">{cashierName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brand-400">Pelanggan</span>
+                <span className="font-semibold">{customerName}</span>
+              </div>
             </div>
-          </div>
 
-          {/* Payment */}
-          <div className="mt-4 pt-3 border-t border-dashed border-brand-200 space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-brand-500">Dibayar</span>
-              <span className="font-semibold text-brand-800">
-                {formatRupiah(paymentAmount)}
-              </span>
+            {/* ═══════════ TABLE HEADER ═══════════ */}
+            <div className="border-b-2 border-dashed border-brand-200 pb-1.5 mb-1">
+              <div className="grid grid-cols-[32px_1fr_62px_62px] gap-1 text-[10px] font-bold text-brand-500 uppercase tracking-wider">
+                <span className="text-center">Qty</span>
+                <span>JUDUL BUKU</span>
+                <span className="text-right">BRUTTO</span>
+                <span className="text-right">NETTO</span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-brand-500">Kembali</span>
-              <span className="font-bold text-brand-700">
-                {formatRupiah(changeAmount)}
-              </span>
-            </div>
-          </div>
 
-          {/* Footer */}
-          <div className="mt-5 text-center border-t-2 border-dashed border-brand-200 pt-4">
-            <p className="text-[11px] text-brand-400 italic">
-              Terima kasih telah berbelanja
-            </p>
-            <p className="text-[10px] text-brand-300 mt-0.5">
-              Barang yang sudah dibeli tidak dapat dikembalikan
-            </p>
-            <div className="mt-3 flex justify-center">
-              <span className="text-[10px] font-bold text-brand-500 tracking-[0.3em]">
-                ~ BUNAYYA PUTRA ~
-              </span>
+            {/* ═══════════ ITEMS ═══════════ */}
+            <div className="space-y-1 mb-3">
+              {items.map((item, i) => {
+                const totalBrutto = item.subtotal;
+                const discountPerItem =
+                  order.discount > 0
+                    ? Math.round((order.discount / items.length) * (i + 1)) -
+                      Math.round((order.discount / items.length) * i)
+                    : 0;
+                const totalNetto = totalBrutto - discountPerItem;
+                return (
+                  <div
+                    key={item.id || i}
+                    className="grid grid-cols-[32px_1fr_62px_62px] gap-1 text-[12px]"
+                  >
+                    <span className="text-center text-brand-500 font-semibold">
+                      {item.quantity}
+                    </span>
+                    <span className="text-brand-900 font-semibold truncate">
+                      {item.book_title}
+                    </span>
+                    <span className="text-right text-brand-600 font-medium">
+                      {formatRupiah(totalBrutto).replace("Rp", "")}
+                    </span>
+                    <span className="text-right text-brand-800 font-bold">
+                      {formatRupiah(totalNetto).replace("Rp", "")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ═══════════ TOTALS ═══════════ */}
+            <div className="border-t-2 border-dashed border-brand-200 pt-3 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-brand-500 font-medium">BRUTTO (Total Kotor)</span>
+                <span className="font-bold text-brand-800">
+                  {formatRupiah(order.total_amount)}
+                </span>
+              </div>
+              {order.discount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-brand-500 font-medium">Diskon</span>
+                  <span className="font-bold text-red-500">
+                    -{formatRupiah(order.discount)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between border-t-2 border-dashed border-brand-200 pt-2">
+                <span className="text-base font-black text-brand-900 uppercase tracking-wider">
+                  TOTAL NETTO
+                </span>
+                <span className="text-xl font-black text-brand-700">
+                  {formatRupiah(order.final_amount)}
+                </span>
+              </div>
+            </div>
+
+            {/* ═══════════ PAYMENT ═══════════ */}
+            <div className="mt-4 pt-3 border-t border-dashed border-brand-200 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-brand-500 font-medium">Dibayar</span>
+                <span className="font-bold text-brand-800">
+                  {formatRupiah(paidAmount)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-brand-500 font-medium">Kembali</span>
+                <span className="font-bold text-brand-700 text-base">
+                  {formatRupiah(change)}
+                </span>
+              </div>
+            </div>
+
+            {/* ═══════════ FOOTER ═══════════ */}
+            <div className="mt-6 pt-4 text-center border-t-2 border-dashed border-brand-200">
+              <p className="text-sm font-bold text-brand-600">
+                Terima kasih telah berbelanja 😊
+              </p>
+              <p className="text-xs text-brand-400 mt-1 font-medium">
+                Selamat datang kembali di {STORE.name}
+              </p>
+              <div className="mt-3">
+                <span className="text-[10px] font-bold text-brand-500 tracking-[0.3em] uppercase">
+                  ~ {STORE.name} ~
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="px-6 pb-6 pt-2 flex gap-3">
-          <button
-            onClick={onClose}
-            className="btn-secondary flex-1"
-          >
-            Tutup
-          </button>
-          <button
-            onClick={handlePrint}
-            className="btn-primary flex-1"
-          >
-            <Printer className="w-4 h-4" />
-            Cetak Struk
-          </button>
+        {/* ═══════════ ACTION BAR ═══════════ */}
+        <div className="px-6 pb-6 pt-3 space-y-2 border-t border-brand-100 bg-white">
+          {/* Download row */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => downloadImage("jpg")}
+              className="btn-secondary flex-1 text-xs py-2"
+            >
+              <FileImage className="w-4 h-4" />
+              JPG
+            </button>
+            <button
+              onClick={() => downloadImage("png")}
+              className="btn-secondary flex-1 text-xs py-2"
+            >
+              <FileImage className="w-4 h-4" />
+              PNG
+            </button>
+            <button
+              onClick={downloadPDF}
+              className="btn-secondary flex-1 text-xs py-2"
+            >
+              <FileText className="w-4 h-4" />
+              PDF
+            </button>
+          </div>
+          {/* Cetak + Tutup */}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn-secondary flex-1">
+              Tutup
+            </button>
+            <button onClick={downloadPDF} className="btn-primary flex-1">
+              <Printer className="w-4 h-4" />
+              Cetak
+            </button>
+          </div>
         </div>
       </div>
     </div>

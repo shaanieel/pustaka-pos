@@ -3,3 +3,7 @@ node_modules/
 .env.local
 .env.*.local
 out/
+
+# Source assets
+/Logo/
+/contoh-struk/
