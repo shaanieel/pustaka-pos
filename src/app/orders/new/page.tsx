@@ -1058,13 +1058,14 @@ export default function NewOrderPage() {
 
       {/* Payment Modal — 3 metode + opsi bayar */}
       {showPayment && savedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-scale-in">
-          <div className="bg-white rounded-3xl shadow-float max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3 mb-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4 animate-scale-in">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-float w-full sm:max-w-sm max-h-[92vh] sm:max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-3 p-5 pb-0 shrink-0">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-emerald-600" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-bold text-brand-950">Pembayaran</h2>
                 <p className="text-sm text-brand-500">
                   #{savedOrder.id.slice(0, 8).toUpperCase()}
@@ -1072,140 +1073,144 @@ export default function NewOrderPage() {
               </div>
             </div>
 
-            <div className="bg-brand-50 rounded-2xl p-4 mb-4">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-brand-500">Brutto</span>
-                <span className="font-semibold text-brand-800">{formatRupiah(savedOrder.total_amount)}</span>
-              </div>
-              {savedOrder.discount > 0 && (
+            {/* Scrollable content */}
+            <div className="overflow-y-auto overscroll-contain px-5 py-4 flex-1 min-h-0">
+              <div className="bg-brand-50 rounded-2xl p-4 mb-4">
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-brand-500">Diskon</span>
-                  <span className="font-semibold text-red-500">-{formatRupiah(savedOrder.discount)}</span>
+                  <span className="text-brand-500">Brutto</span>
+                  <span className="font-semibold text-brand-800">{formatRupiah(savedOrder.total_amount)}</span>
                 </div>
-              )}
-              <div className="flex justify-between border-t border-brand-200 pt-2">
-                <span className="font-bold text-brand-950">Total</span>
-                <span className="text-xl font-black text-brand-700">{formatRupiah(savedOrder.final_amount)}</span>
-              </div>
-            </div>
-
-            {/* Metode Pembayaran — 3 tombol menyamping */}
-            <p className="text-xs font-bold text-brand-800 mb-2">Metode Pembayaran</p>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <button
-                onClick={() => setPaymentMethod("tunai")}
-                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
-                  paymentMethod === "tunai"
-                    ? "border-brand-600 bg-brand-50 text-brand-700"
-                    : "border-brand-100 text-brand-400 hover:border-brand-300"
-                }`}
-              >
-                <Banknote className="w-5 h-5" />
-                <span className="text-[11px] font-bold">Tunai</span>
-              </button>
-              <button
-                onClick={() => setPaymentMethod("qris")}
-                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
-                  paymentMethod === "qris"
-                    ? "border-brand-600 bg-brand-50 text-brand-700"
-                    : "border-brand-100 text-brand-400 hover:border-brand-300"
-                }`}
-              >
-                <QrCode className="w-5 h-5" />
-                <span className="text-[11px] font-bold">QRIS</span>
-              </button>
-              <button
-                onClick={() => setPaymentMethod("transfer")}
-                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
-                  paymentMethod === "transfer"
-                    ? "border-brand-600 bg-brand-50 text-brand-700"
-                    : "border-brand-100 text-brand-400 hover:border-brand-300"
-                }`}
-              >
-                <ArrowRightLeft className="w-5 h-5" />
-                <span className="text-[11px] font-bold">Transfer</span>
-              </button>
-            </div>
-
-            {/* Jumlah Dibayar */}
-            <div className="space-y-3">
-              <label className="label flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-brand-500" />
-                Jumlah Dibayar
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-400 font-semibold">
-                  Rp
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={paymentAmount || ""}
-                  onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
-                  className="input-field pl-10 text-lg font-bold"
-                  placeholder="0"
-                  autoFocus
-                />
-              </div>
-
-              {/* Quick buttons — compact */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPaymentAmount(savedOrder.final_amount)}
-                  className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
-                >
-                  Lunas
-                </button>
-                <button
-                  onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
-                  className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all"
-                >
-                  Bayar Setengah
-                </button>
-                <button
-                  onClick={() => setPaymentAmount(0)}
-                  className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
-                >
-                  Belum Bayar
-                </button>
-              </div>
-
-              {/* Status preview */}
-              {paymentAmount > 0 && (
-                <div className="flex justify-between items-center text-sm px-1">
-                  <span className="text-brand-500">
-                    {paymentAmount >= savedOrder.final_amount ? "Kembalian" : "Sisa hutang"}
-                  </span>
-                  <span className={`font-bold ${
-                    paymentAmount >= savedOrder.final_amount ? "text-brand-700" : "text-amber-600"
-                  }`}>
-                    {paymentAmount >= savedOrder.final_amount
-                      ? formatRupiah(paymentAmount - savedOrder.final_amount)
-                      : formatRupiah(savedOrder.final_amount - paymentAmount)
-                    }
-                  </span>
-                </div>
-              )}
-
-              {/* Status badge preview */}
-              <div className="flex justify-center">
-                {paymentAmount <= 0 ? (
-                  <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
-                    ● Belum Bayar
-                  </span>
-                ) : paymentAmount >= savedOrder.final_amount ? (
-                  <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                    ● Lunas
-                  </span>
-                ) : (
-                  <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
-                    ● Belum Lunas
-                  </span>
+                {savedOrder.discount > 0 && (
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-brand-500">Diskon</span>
+                    <span className="font-semibold text-red-500">-{formatRupiah(savedOrder.discount)}</span>
+                  </div>
                 )}
+                <div className="flex justify-between border-t border-brand-200 pt-2">
+                  <span className="font-bold text-brand-950">Total</span>
+                  <span className="text-xl font-black text-brand-700">{formatRupiah(savedOrder.final_amount)}</span>
+                </div>
+              </div>
+
+              {/* Metode Pembayaran — 3 tombol menyamping */}
+              <p className="text-xs font-bold text-brand-800 mb-2">Metode Pembayaran</p>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <button
+                  onClick={() => setPaymentMethod("tunai")}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                    paymentMethod === "tunai"
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
+                      : "border-brand-100 text-brand-400 hover:border-brand-300"
+                  }`}
+                >
+                  <Banknote className="w-5 h-5" />
+                  <span className="text-[11px] font-bold">Tunai</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod("qris")}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                    paymentMethod === "qris"
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
+                      : "border-brand-100 text-brand-400 hover:border-brand-300"
+                  }`}
+                >
+                  <QrCode className="w-5 h-5" />
+                  <span className="text-[11px] font-bold">QRIS</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod("transfer")}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                    paymentMethod === "transfer"
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
+                      : "border-brand-100 text-brand-400 hover:border-brand-300"
+                  }`}
+                >
+                  <ArrowRightLeft className="w-5 h-5" />
+                  <span className="text-[11px] font-bold">Transfer</span>
+                </button>
+              </div>
+
+              {/* Jumlah Dibayar */}
+              <div className="space-y-3">
+                <label className="label flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-brand-500" />
+                  Jumlah Dibayar
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-400 font-semibold">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={paymentAmount || ""}
+                    onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
+                    className="input-field pl-10 text-lg font-bold"
+                    placeholder="0"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Quick buttons — compact */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPaymentAmount(savedOrder.final_amount)}
+                    className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
+                  >
+                    Lunas
+                  </button>
+                  <button
+                    onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
+                    className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all"
+                  >
+                    Bayar Setengah
+                  </button>
+                  <button
+                    onClick={() => setPaymentAmount(0)}
+                    className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
+                  >
+                    Belum Bayar
+                  </button>
+                </div>
+
+                {/* Status preview */}
+                {paymentAmount > 0 && (
+                  <div className="flex justify-between items-center text-sm px-1">
+                    <span className="text-brand-500">
+                      {paymentAmount >= savedOrder.final_amount ? "Kembalian" : "Sisa hutang"}
+                    </span>
+                    <span className={`font-bold ${
+                      paymentAmount >= savedOrder.final_amount ? "text-brand-700" : "text-amber-600"
+                    }`}>
+                      {paymentAmount >= savedOrder.final_amount
+                        ? formatRupiah(paymentAmount - savedOrder.final_amount)
+                        : formatRupiah(savedOrder.final_amount - paymentAmount)
+                      }
+                    </span>
+                  </div>
+                )}
+
+                {/* Status badge preview */}
+                <div className="flex justify-center">
+                  {paymentAmount <= 0 ? (
+                    <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
+                      ● Belum Bayar
+                    </span>
+                  ) : paymentAmount >= savedOrder.final_amount ? (
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                      ● Lunas
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                      ● Belum Lunas
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-3 mt-5">
+            {/* Bottom buttons — always visible */}
+            <div className="flex gap-3 p-5 pt-3 shrink-0 border-t border-brand-100">
               <button
                 onClick={() => {
                   setShowPayment(false);
