@@ -245,13 +245,20 @@ export default function NewOrderPage() {
   // ── SAVE ORDER ──
   async function handleSave() {
     if (cart.length === 0) {
-      toast.error("Tambahkan minimal 1 buku");
+      toast.error("Keranjang masih kosong");
       return;
     }
     if (discount > subtotal) {
-      toast.error("Diskon tidak boleh melebihi subtotal");
+      toast.error("Diskon melebihi total");
       return;
     }
+    // Validasi: nama + no HP wajib (kecuali pilih dari data yang ada)
+    const hasCustomer = selectedCustomer || (newCustomer.name.trim() && newCustomer.phone.trim());
+    if (!hasCustomer) {
+      toast.error("Nama pelanggan dan No. WA/HP wajib diisi");
+      return;
+    }
+
     setSaving(true);
     try {
       let customerId = selectedCustomer?.id || null;
@@ -1028,13 +1035,22 @@ export default function NewOrderPage() {
               </button>
             </div>
             {!selectedCustomer && (
-              <input
-                type="text"
-                value={newCustomer.name}
-                onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Nama pelanggan (opsional)"
-                className="input-field text-sm py-2"
-              />
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newCustomer.name}
+                  onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Nama pelanggan *"
+                  className="input-field text-sm py-2"
+                />
+                <input
+                  type="tel"
+                  value={newCustomer.phone}
+                  onChange={(e) => setNewCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="No. WA/HP *"
+                  className="input-field text-sm py-2"
+                />
+              </div>
             )}
           </div>
         </div>
@@ -1132,17 +1148,23 @@ export default function NewOrderPage() {
                 />
               </div>
 
-              {/* Quick buttons */}
+              {/* Quick buttons — compact */}
               <div className="flex gap-2">
                 <button
                   onClick={() => setPaymentAmount(savedOrder.final_amount)}
-                  className="flex-1 text-xs font-bold py-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
+                  className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
                 >
-                  Lunas ({formatRupiah(savedOrder.final_amount)})
+                  Lunas
+                </button>
+                <button
+                  onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
+                  className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all"
+                >
+                  Bayar Setengah
                 </button>
                 <button
                   onClick={() => setPaymentAmount(0)}
-                  className="flex-1 text-xs font-bold py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
+                  className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
                 >
                   Belum Bayar
                 </button>

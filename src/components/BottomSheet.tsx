@@ -108,67 +108,67 @@ export function BottomSheet({
     : 0;
 
   return (
-    <>
-      {/* Backdrop — only when expanded */}
-      {expanded && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] lg:hidden"
-          onClick={() => setExpanded(false)}
-        />
-      )}
-
-      <div
-        ref={sheetRef}
-        className={clsx(
-          "fixed bottom-0 left-0 right-0 z-50 lg:hidden",
-          "bg-white rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)]",
-          "transition-transform duration-300 ease-out",
-          !dragging && "transition-transform",
-          expanded ? "" : ""
+      <>
+        {/* Backdrop — only when expanded */}
+        {expanded && (
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] lg:hidden"
+            onClick={() => setExpanded(false)}
+          />
         )}
-        style={{
-          transform: `translateY(${translateY}px)`,
-          height: expanded ? `${expandedHeight}vh` : "auto",
-          maxHeight: expandedHeight + "vh",
-          touchAction: "none",
-        }}
-      >
-        {/* Drag handle */}
-        <div
-          className="flex flex-col items-center pt-2 pb-1 cursor-grab active:cursor-grabbing select-none"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-        >
-          <div className="w-10 h-1.5 rounded-full bg-brand-200 mb-2" />
-          {collapsedLabel && !expanded && (
-            <div className="w-full px-4 pb-2">{collapsedLabel}</div>
-          )}
-          {expanded && (
-            <div className="w-full px-4 flex items-center justify-between pb-1">
-              <span className="text-sm font-bold text-brand-950">Keranjang</span>
-              <button
-                onClick={() => setExpanded(false)}
-                className="text-xs text-brand-400 hover:text-brand-600 font-medium"
-              >
-                Tutup
-              </button>
-            </div>
-          )}
-        </div>
 
-        {/* Content */}
         <div
+          ref={sheetRef}
           className={clsx(
-            "overflow-y-auto overscroll-contain",
-            expanded ? "px-4 pb-8" : "px-4 pb-3"
+            "fixed bottom-0 left-0 right-0 z-50 lg:hidden",
+            "bg-white rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)]",
+            "transition-transform duration-300 ease-out",
+            !dragging && "transition-transform",
+            expanded ? "flex flex-col" : "",
           )}
-          style={{ maxHeight: expanded ? "calc(100% - 50px)" : "60px" }}
+          style={{
+            transform: `translateY(${translateY}px)`,
+            height: expanded ? `${expandedHeight}vh` : "auto",
+            maxHeight: expandedHeight + "vh",
+            touchAction: "none",
+          }}
         >
-          {children}
+          {/* Drag handle */}
+          <div
+            className="flex flex-col items-center pt-2 pb-1 cursor-grab active:cursor-grabbing select-none shrink-0"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+          >
+            <div className="w-10 h-1.5 rounded-full bg-brand-200 mb-2" />
+            {collapsedLabel && !expanded && (
+              <div className="w-full px-4 pb-2">{collapsedLabel}</div>
+            )}
+            {expanded && (
+              <div className="w-full px-4 flex items-center justify-between pb-1">
+                <span className="text-sm font-bold text-brand-950">Keranjang</span>
+                <button
+                  onClick={() => setExpanded(false)}
+                  className="text-xs text-brand-400 hover:text-brand-600 font-medium"
+                >
+                  Tutup
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Content — scrollable, fills remaining space */}
+          <div
+            className={clsx(
+              "overflow-y-auto overscroll-contain scroll-smooth",
+              expanded ? "px-4 pb-8 flex-1 min-h-0" : "px-4 pb-3"
+            )}
+            style={{ maxHeight: expanded ? "calc(85vh - 60px)" : "60px" }}
+          >
+            {children}
+          </div>
         </div>
-      </div>
-    </>
-  );
+      </>
+    );
 }
