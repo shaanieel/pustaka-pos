@@ -7,8 +7,10 @@ import { supabase } from "@/lib/supabase";
 import { Book, Customer, CartItem, Order, OrderItem } from "@/types";
 import { SearchBar } from "@/components/SearchBar";
 import { CategoryPicker } from "@/components/CategoryPicker";
+import { BottomSheet } from "@/components/BottomSheet";
 import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
+import { BookSearchCard } from "@/components/BookSearchCard";
 import { formatRupiah } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -22,6 +24,9 @@ import {
   Wallet,
   CheckCircle2,
   ScanLine,
+  ImageOff,
+  Loader2,
+  ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,11 +34,13 @@ import toast from "react-hot-toast";
 
 export default function NewOrderPage() {
   const router = useRouter();
-  // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
 
+  // Books — fetch ALL for poster grid
+  const [allBooks, setAllBooks] = useState<Book[]>([]);
+  const [loadingBooks, setLoadingBooks] = useState(true);
+
   // Book search
-  const [books, setBooks] = useState<Book[]>([]);
   const [bookSearch, setBookSearch] = useState("");
 
   // Customer
@@ -44,7 +51,6 @@ export default function NewOrderPage() {
   const [showAllCustomers, setShowAllCustomers] = useState(false);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
 
-  // New customer form
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "" });
 
   // Category filter
@@ -53,10 +59,8 @@ export default function NewOrderPage() {
   // Discount
   const [discount, setDiscount] = useState(0);
 
-  // Saving
+  // Modal
   const [saving, setSaving] = useState(false);
-
-  // Payment modal
   const [savedOrder, setSavedOrder] = useState<Order | null>(null);
   const [savedItems, setSavedItems] = useState<OrderItem[]>([]);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -64,7 +68,35 @@ export default function NewOrderPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const changeAmount = Math.max(0, paymentAmount - (savedOrder?.final_amount || 0));
 
-  // ── SCAN BARCODE HANDLER (Model 2: Kasir) ──
+  // Fetch ALL books on mount
+  useEffect(() => {
+    (async () => {
+      setLoadingBooks(true);
+      try {
+        const { data } = await supabase
+          .from("books")
+          .select("*")
+          .order("title");
+        setAllBooks(data || []);
+      } catch {
+        // silent
+      }
+      setLoadingBooks(false);
+    })();
+  }, []);
+
+  // Filtered books
+  const displayedBooks = allBooks.filter((b) => {
+    const matchSearch =
+      !bookSearch.trim() ||
+      b.title.toLowerCase().includes(bookSearch.toLowerCase()) ||
+      (b.author && b.author.toLowerCase().includes(bookSearch.toLowerCase())) ||
+      (b.isbn && b.isbn.includes(bookSearch));
+    const matchCategory = !selectedCategory || b.category === selectedCategory;
+    return matchSearch && matchCategory;
+  });
+
+  // ── SCAN BARCODE ──
   const handleScannedISBN = useCallback(async (isbn: string) => {
     toast.loading(`Mencari buku ISBN: ${isbn}...`, { id: "scan-kasir" });
     try {
@@ -77,7 +109,6 @@ export default function NewOrderPage() {
       toast.dismiss("scan-kasir");
 
       if (error || !data) {
-        // Buku belum ada di database → kasih opsi tambah
         toast(
           (t) => (
             <div className="flex flex-col gap-2">
@@ -100,8 +131,6 @@ export default function NewOrderPage() {
       }
 
       const book = data as Book;
-
-      // Auto-add ke cart
       const existing = cart.find((c) => c.book.id === book.id);
       if (existing) {
         if (existing.quantity >= book.stock) {
@@ -118,7 +147,6 @@ export default function NewOrderPage() {
         }
         setCart((prev) => [...prev, { book, quantity: 1 }]);
       }
-
       toast.success(`${book.title} — ditambahkan ke keranjang!`, { duration: 2000 });
     } catch {
       toast.dismiss("scan-kasir");
@@ -126,35 +154,7 @@ export default function NewOrderPage() {
     }
   }, [cart]);
 
-  // Search books
-  const searchBooks = useCallback(async () => {
-    const hasSearch = bookSearch.trim().length > 0;
-    const hasCategory = selectedCategory.trim().length > 0;
-    if (!hasSearch && !hasCategory) {
-      setBooks([]);
-      return;
-    }
-    try {
-      let query = supabase.from("books").select("*");
-      if (hasSearch) {
-        query = query.or(`title.ilike.%${bookSearch}%,author.ilike.%${bookSearch}%,isbn.ilike.%${bookSearch}%`);
-      }
-      if (hasCategory) {
-        query = query.eq("category", selectedCategory);
-      }
-      const { data } = await query.limit(10);
-      setBooks(data || []);
-    } catch {
-      // silent
-    }
-  }, [bookSearch, selectedCategory]);
-
-  useEffect(() => {
-    const timer = setTimeout(searchBooks, 300);
-    return () => clearTimeout(timer);
-  }, [searchBooks]);
-
-  // Fetch all customers (on click)
+  // ── CUSTOMER ──
   const fetchAllCustomers = useCallback(async () => {
     try {
       const { data } = await supabase
@@ -169,7 +169,6 @@ export default function NewOrderPage() {
     setShowCustomerSearch(false);
   }, []);
 
-  // Filter all customers by search locally
   const filteredAllCustomers = customerSearch.trim()
     ? allCustomers.filter(
         (c) =>
@@ -177,6 +176,7 @@ export default function NewOrderPage() {
           (c.phone && c.phone.includes(customerSearch))
       )
     : allCustomers;
+
   const searchCustomers = useCallback(async () => {
     if (!customerSearch.trim()) {
       setCustomers([]);
@@ -189,9 +189,7 @@ export default function NewOrderPage() {
         .or(`name.ilike.%${customerSearch}%,phone.ilike.%${customerSearch}%`)
         .limit(10);
       setCustomers(data || []);
-    } catch {
-      // silent
-    }
+    } catch {}
   }, [customerSearch]);
 
   useEffect(() => {
@@ -199,7 +197,7 @@ export default function NewOrderPage() {
     return () => clearTimeout(timer);
   }, [searchCustomers]);
 
-  // Add to cart
+  // ── CART ACTIONS ──
   function addToCart(book: Book) {
     const existing = cart.find((c) => c.book.id === book.id);
     if (existing) {
@@ -215,8 +213,6 @@ export default function NewOrderPage() {
       }
       setCart([...cart, { book, quantity: 1 }]);
     }
-    setBookSearch("");
-    setBooks([]);
   }
 
   function removeFromCart(bookId: string) {
@@ -238,24 +234,11 @@ export default function NewOrderPage() {
     );
   }
 
-  // Quick add qty by typing
-  function setQty(bookId: string, val: number) {
-    if (val < 1) val = 1;
-    setCart(
-      cart.map((c) => {
-        if (c.book.id !== bookId) return c;
-        if (val > c.book.stock) {
-          toast.error("Stok tidak mencukupi");
-          return c;
-        }
-        return { ...c, quantity: val };
-      })
-    );
-  }
-
   const subtotal = cart.reduce((sum, c) => sum + c.book.price * c.quantity, 0);
   const finalAmount = subtotal - discount;
+  const cartItemCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
+  // ── SAVE ORDER ──
   async function handleSave() {
     if (cart.length === 0) {
       toast.error("Tambahkan minimal 1 buku");
@@ -265,10 +248,8 @@ export default function NewOrderPage() {
       toast.error("Diskon tidak boleh melebihi subtotal");
       return;
     }
-
     setSaving(true);
     try {
-      // 0. Auto-create new customer if form is filled
       let customerId = selectedCustomer?.id || null;
       let customerName = selectedCustomer?.name || null;
       if (newCustomer.name.trim()) {
@@ -286,7 +267,6 @@ export default function NewOrderPage() {
         customerName = newCust.name;
       }
 
-      // 1. Create order
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
@@ -302,7 +282,6 @@ export default function NewOrderPage() {
 
       if (orderError) throw orderError;
 
-      // 2. Create order items
       const orderItems = cart.map((c) => ({
         order_id: order.id,
         book_id: c.book.id,
@@ -319,7 +298,6 @@ export default function NewOrderPage() {
 
       if (itemsError) throw itemsError;
 
-      // 3. Reduce stock
       for (const c of cart) {
         await supabase
           .from("books")
@@ -328,7 +306,7 @@ export default function NewOrderPage() {
       }
 
       setSavedOrder(order);
-      setSavedItems(itemsData || orderItems);
+      setSavedItems(itemsData || (orderItems as any));
       setPaymentAmount(finalAmount);
       setShowPayment(true);
     } catch (err: any) {
@@ -358,10 +336,9 @@ export default function NewOrderPage() {
     setNewCustomer({ name: "", phone: "", email: "" });
     setShowAllCustomers(false);
     setCustomerSearch("");
-    setSelectedCategory("");
   }
 
-  // If receipt is showing
+  // Receipt screen
   if (showReceipt && savedOrder && savedItems.length > 0) {
     return (
       <Receipt
@@ -375,273 +352,550 @@ export default function NewOrderPage() {
     );
   }
 
+  // ===== POSTER GRID + BOTTOM SHEET LAYOUT =====
   return (
     <>
-      <div className="space-y-5 max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <Link href="/orders" className="btn-ghost p-2 -ml-2">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex-1">
-            <h1 className="page-title">Pesanan Baru</h1>
-            <p className="page-subtitle">Tambahkan buku ke keranjang</p>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4 lg:mb-5">
+        <Link href="/orders" className="btn-ghost p-2 -ml-2 shrink-0">
+          <ArrowLeft className="w-5 h-5" />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="page-title text-lg lg:text-2xl">Pesanan Baru</h1>
+          <p className="page-subtitle text-xs lg:text-sm">Pilih buku & tambah ke keranjang</p>
+        </div>
+        <ScannerButton onScan={handleScannedISBN} label="Scan" size="sm" />
+      </div>
+
+      {/* --- MOBILE LAYOUT --- */}
+      <div className="lg:hidden space-y-3">
+        {/* Search + Kategori */}
+        <div className="card p-3 space-y-2">
+          <CategoryPicker
+            value={selectedCategory}
+            onChange={(cat) => setSelectedCategory(cat)}
+            compact
+            showAllOption
+          />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <SearchBar
+                value={bookSearch}
+                onChange={setBookSearch}
+                placeholder="Cari judul..."
+              />
+            </div>
+            <ScannerButton onScan={handleScannedISBN} variant="icon" />
           </div>
-          <ScannerButton onScan={handleScannedISBN} label="Scan ISBN" size="sm" />
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-5">
-          {/* Left: Book search + Cart */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Book Search */}
-            <div className="card p-4 space-y-3">
-              <label className="label">Cari Buku</label>
-              <CategoryPicker
-                value={selectedCategory}
-                onChange={(cat) => {
-                  setSelectedCategory(cat);
-                  setBookSearch("");
-                }}
-                compact
-              />
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <SearchBar
-                    value={bookSearch}
-                    onChange={setBookSearch}
-                    placeholder="Ketik judul, penulis, atau ISBN..."
-                  />
-                </div>
-                <ScannerButton onScan={handleScannedISBN} variant="icon" />
-              </div>
-              {books.length > 0 && (
-                <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-64 overflow-y-auto">
-                  {books.map((b) => (
-                    <button
-                      key={b.id}
-                      onClick={() => addToCart(b)}
-                      className="w-full flex items-center justify-between p-3 text-left hover:bg-brand-50/60 transition-colors"
-                    >
-                      <div>
-                        <p className="font-semibold text-brand-950 text-sm">{b.title}</p>
-                        <p className="text-xs text-brand-500">
-                          {b.author} &middot; Stok: {b.stock}
+        {/* Poster Grid */}
+        {loadingBooks ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 text-brand-400 animate-spin" />
+          </div>
+        ) : displayedBooks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-brand-400">
+            <ImageOff className="w-10 h-10 mb-2" />
+            <p className="text-sm">Buku tidak ditemukan</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2.5">
+            {displayedBooks.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => addToCart(b)}
+                className="group relative bg-white rounded-xl border border-brand-100 overflow-hidden 
+                           hover:shadow-md active:scale-[0.97] transition-all duration-150 text-left"
+              >
+                {/* Cover poster */}
+                <div className="aspect-[3/4] bg-gradient-to-br from-brand-50 to-brand-100 relative overflow-hidden">
+                  {b.cover_url ? (
+                    <img
+                      src={b.cover_url}
+                      alt={b.title}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full p-2">
+                      <div className="text-center">
+                        <ImageOff className="w-5 h-5 text-brand-300 mx-auto mb-1" />
+                        <p className="text-[9px] text-brand-400 leading-tight line-clamp-2">
+                          {b.title}
                         </p>
                       </div>
-                      <span className="text-sm font-bold text-brand-700">{formatRupiah(b.price)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Cart */}
-            <div className="card p-4">
-              <h2 className="font-bold text-brand-950 flex items-center gap-2 mb-3">
-                <ShoppingCart className="w-4 h-4 text-brand-600" />
-                Keranjang ({cart.length} item)
-              </h2>
-
-              {cart.length === 0 ? (
-                <p className="text-sm text-brand-400 py-8 text-center">
-                  Belum ada buku. Cari dan tambahkan di atas, atau scan barcode.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {cart.map((c) => (
-                    <div key={c.book.id} className="flex items-center justify-between py-2 px-3 rounded-xl bg-brand-50/60">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-brand-950 truncate">{c.book.title}</p>
-                        <p className="text-xs text-brand-500">{formatRupiah(c.book.price)} / item</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateQty(c.book.id, -1)}
-                          className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          max={c.book.stock}
-                          value={c.quantity}
-                          onChange={(e) => setQty(c.book.id, Number(e.target.value) || 1)}
-                          className="w-10 text-center text-sm font-bold text-brand-950 bg-transparent border-b border-brand-200 focus:outline-none focus:border-brand-500 [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        />
-                        <button
-                          onClick={() => updateQty(c.book.id, 1)}
-                          className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-sm font-bold text-brand-700 w-24 text-right">
-                          {formatRupiah(c.book.price * c.quantity)}
-                        </span>
-                        <button
-                          onClick={() => removeFromCart(c.book.id)}
-                          className="p-1 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
                     </div>
-                  ))}
+                  )}
+                  {/* Low stock badge */}
+                  {b.stock > 0 && b.stock <= 3 && (
+                    <span className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                      {b.stock}
+                    </span>
+                  )}
+                  {b.stock <= 0 && (
+                    <span className="absolute top-1 left-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                      Habis
+                    </span>
+                  )}
+                  {/* + button — like poster film */}
+                  <div className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-brand-600 text-white 
+                                 flex items-center justify-center shadow-md
+                                 group-hover:bg-brand-700 group-active:scale-90 transition-all">
+                    <Plus className="w-4 h-4" />
+                  </div>
                 </div>
-              )}
+                {/* Info */}
+                <div className="p-1.5">
+                  <p className="text-[10px] font-semibold text-brand-950 leading-tight line-clamp-2 min-h-[2em]">
+                    {b.title}
+                  </p>
+                  {b.author && (
+                    <p className="text-[8px] text-brand-400 mt-0.5 truncate">{b.author}</p>
+                  )}
+                  <p className="text-[11px] font-bold text-brand-700 mt-0.5">
+                    {formatRupiah(b.price)}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Spacer for bottom sheet */}
+        <div className="h-24" />
+      </div>
+
+      {/* --- DESKTOP LAYOUT --- */}
+      <div className="hidden lg:grid lg:grid-cols-3 gap-5">
+        {/* Left: Poster Grid */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="card p-4 space-y-3">
+            <label className="label">Cari Buku</label>
+            <CategoryPicker
+              value={selectedCategory}
+              onChange={(cat) => setSelectedCategory(cat)}
+              compact
+              showAllOption
+            />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <SearchBar
+                  value={bookSearch}
+                  onChange={setBookSearch}
+                  placeholder="Ketik judul, penulis, atau ISBN..."
+                />
+              </div>
+              <ScannerButton onScan={handleScannedISBN} variant="icon" />
             </div>
           </div>
 
-          {/* Right: Customer + Summary */}
-          <div className="space-y-4">
-            {/* Customer */}
-            <div className="card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-brand-950 flex items-center gap-2">
-                  <User className="w-4 h-4 text-brand-600" />
-                  Pelanggan
-                </h3>
+          {/* Poster Grid Desktop */}
+          {loadingBooks ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 text-brand-400 animate-spin" />
+            </div>
+          ) : displayedBooks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-brand-400">
+              <ImageOff className="w-12 h-12 mb-3" />
+              <p className="text-sm">Buku tidak ditemukan</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
+              {displayedBooks.map((b) => (
                 <button
-                  onClick={() => {
-                    if (showAllCustomers) {
-                      setShowAllCustomers(false);
-                      setCustomerSearch("");
-                    } else {
-                      fetchAllCustomers();
-                    }
-                    setSelectedCustomer(null);
-                  }}
-                  className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+                  key={b.id}
+                  onClick={() => addToCart(b)}
+                  className="group relative bg-white rounded-2xl border border-brand-100 overflow-hidden 
+                             hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.97] transition-all duration-200 text-left"
                 >
-                  {selectedCustomer ? "Ganti" : "Pilih"}
-                </button>
-              </div>
-
-              {selectedCustomer ? (
-                <div className="bg-brand-50 rounded-xl p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-brand-950 text-sm">{selectedCustomer.name}</p>
-                      <p className="text-xs text-brand-500">{selectedCustomer.phone}</p>
+                  <div className="aspect-[3/4] bg-gradient-to-br from-brand-50 to-brand-100 relative overflow-hidden">
+                    {b.cover_url ? (
+                      <img
+                        src={b.cover_url}
+                        alt={b.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full p-3">
+                        <div className="text-center">
+                          <ImageOff className="w-7 h-7 text-brand-300 mx-auto mb-1" />
+                          <p className="text-xs text-brand-400 line-clamp-3">{b.title}</p>
+                        </div>
+                      </div>
+                    )}
+                    {b.stock > 0 && b.stock <= 3 && (
+                      <span className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+                        Sisa {b.stock}
+                      </span>
+                    )}
+                    {b.stock <= 0 && (
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none">
+                        Habis
+                      </span>
+                    )}
+                    <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-brand-600 text-white 
+                                   flex items-center justify-center shadow-md
+                                   group-hover:bg-brand-700 group-active:scale-90 transition-all">
+                      <Plus className="w-5 h-5" />
                     </div>
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-xs font-semibold text-brand-950 leading-tight line-clamp-2 min-h-[2.5em]">
+                      {b.title}
+                    </p>
+                    {b.author && (
+                      <p className="text-[10px] text-brand-400 mt-0.5 truncate">{b.author}</p>
+                    )}
+                    <p className="text-sm font-bold text-brand-700 mt-1">
+                      {formatRupiah(b.price)}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Cart + Customer (Desktop) */}
+        <div className="space-y-4">
+          {/* Cart */}
+          <div className="card p-4">
+            <h2 className="font-bold text-brand-950 flex items-center gap-2 mb-3">
+              <ShoppingCart className="w-4 h-4 text-brand-600" />
+              Keranjang ({cartItemCount} item)
+            </h2>
+
+            {cart.length === 0 ? (
+              <p className="text-sm text-brand-400 py-8 text-center">
+                Belum ada buku. Klik tombol <Plus className="w-3 h-3 inline" /> di poster buku.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {cart.map((c) => (
+                  <div key={c.book.id} className="flex items-center gap-2 py-2 px-3 rounded-xl bg-brand-50/60">
+                    {c.book.cover_url ? (
+                      <img
+                        src={c.book.cover_url}
+                        alt={c.book.title}
+                        className="w-9 h-12 rounded-lg object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-9 h-12 rounded-lg bg-brand-100 flex items-center justify-center shrink-0">
+                        <ImageOff className="w-4 h-4 text-brand-300" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-brand-950 truncate">{c.book.title}</p>
+                      <p className="text-[10px] text-brand-500">{formatRupiah(c.book.price)}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateQty(c.book.id, -1)}
+                        className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-6 text-center text-xs font-bold text-brand-950">{c.quantity}</span>
+                      <button
+                        onClick={() => updateQty(c.book.id, 1)}
+                        className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="text-xs font-bold text-brand-700 w-20 text-right">
+                      {formatRupiah(c.book.price * c.quantity)}
+                    </span>
                     <button
-                      onClick={() => {
-                        setSelectedCustomer(null);
-                        setShowAllCustomers(false);
-                        setCustomerSearch("");
-                      }}
-                      className="text-xs text-red-400 hover:text-red-500"
+                      onClick={() => removeFromCart(c.book.id)}
+                      className="p-1 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-500"
                     >
-                      Hapus
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
-                </div>
-              ) : (
-                <p className="text-sm text-brand-400">Pelanggan Umum</p>
-              )}
-
-              {/* All customers dropdown */}
-              {showAllCustomers && (
-                <div className="space-y-2">
-                  <SearchBar
-                    value={customerSearch}
-                    onChange={setCustomerSearch}
-                    placeholder="Cari nama atau telepon..."
-                  />
-                  <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-60 overflow-y-auto">
-                    {filteredAllCustomers.length === 0 ? (
-                      <p className="p-3 text-sm text-brand-400 text-center">Pelanggan tidak ditemukan</p>
-                    ) : (
-                      filteredAllCustomers.map((c) => (
-                        <button
-                          key={c.id}
-                          onClick={() => {
-                            setSelectedCustomer(c);
-                            setShowAllCustomers(false);
-                            setCustomerSearch("");
-                            setNewCustomer({ name: "", phone: "", email: "" });
-                          }}
-                          className="w-full p-3 text-left hover:bg-brand-50/60 transition-colors"
-                        >
-                          <p className="font-semibold text-brand-950 text-sm">{c.name}</p>
-                          <p className="text-xs text-brand-500">{c.phone}</p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* New customer form */}
-              <div className="border-t border-brand-100 pt-3 mt-2">
-                <p className="text-xs font-semibold text-brand-500 mb-2">Pelanggan Baru</p>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={newCustomer.name}
-                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="Nama *"
-                    className="input-field text-sm"
-                  />
-                  <input
-                    type="text"
-                    value={newCustomer.phone}
-                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, phone: e.target.value }))}
-                    placeholder="No. WA/HP"
-                    className="input-field text-sm"
-                  />
-                  <input
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={(e) => setNewCustomer((prev) => ({ ...prev, email: e.target.value }))}
-                    placeholder="Email"
-                    className="input-field text-sm"
-                  />
-                </div>
+                ))}
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Summary */}
-            <div className="card p-4 space-y-3">
-              <h3 className="font-bold text-brand-950">Ringkasan</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-brand-500">Subtotal (Brutto)</span>
-                  <span className="font-semibold text-brand-950">{formatRupiah(subtotal)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-brand-500">Diskon</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-brand-400">Rp</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={subtotal}
-                      value={discount || ""}
-                      onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                      className="w-24 text-right input-field py-1.5 text-sm"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                <hr className="border-brand-100" />
-                <div className="flex justify-between">
-                  <span className="font-bold text-brand-950">Total (Netto)</span>
-                  <span className="text-lg font-bold text-brand-700">{formatRupiah(finalAmount)}</span>
-                </div>
-              </div>
+          {/* Customer */}
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-brand-950 flex items-center gap-2">
+                <User className="w-4 h-4 text-brand-600" />
+                Pelanggan
+              </h3>
               <button
-                onClick={handleSave}
-                disabled={saving || cart.length === 0 || discount > subtotal}
-                className="btn-primary w-full mt-2"
+                onClick={() => {
+                  if (showAllCustomers) {
+                    setShowAllCustomers(false);
+                    setCustomerSearch("");
+                  } else {
+                    fetchAllCustomers();
+                  }
+                  setSelectedCustomer(null);
+                }}
+                className="text-xs font-semibold text-brand-600 hover:text-brand-700"
               >
-                <Save className="w-4 h-4" />
-                {saving ? "Menyimpan..." : "Simpan & Bayar"}
+                {selectedCustomer ? "Ganti" : "Pilih"}
               </button>
             </div>
+
+            {selectedCustomer ? (
+              <div className="bg-brand-50 rounded-xl p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-brand-950 text-sm">{selectedCustomer.name}</p>
+                    <p className="text-xs text-brand-500">{selectedCustomer.phone}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedCustomer(null);
+                      setShowAllCustomers(false);
+                      setCustomerSearch("");
+                    }}
+                    className="text-xs text-red-400 hover:text-red-500"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-brand-400">Pelanggan Umum</p>
+            )}
+
+            {showAllCustomers && (
+              <div className="space-y-2">
+                <SearchBar
+                  value={customerSearch}
+                  onChange={setCustomerSearch}
+                  placeholder="Cari nama atau telepon..."
+                />
+                <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-60 overflow-y-auto">
+                  {filteredAllCustomers.length === 0 ? (
+                    <p className="p-3 text-sm text-brand-400 text-center">Pelanggan tidak ditemukan</p>
+                  ) : (
+                    filteredAllCustomers.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setSelectedCustomer(c);
+                          setShowAllCustomers(false);
+                          setCustomerSearch("");
+                          setNewCustomer({ name: "", phone: "", email: "" });
+                        }}
+                        className="w-full p-3 text-left hover:bg-brand-50/60 transition-colors"
+                      >
+                        <p className="font-semibold text-brand-950 text-sm">{c.name}</p>
+                        <p className="text-xs text-brand-500">{c.phone}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-brand-100 pt-3 mt-2">
+              <p className="text-xs font-semibold text-brand-500 mb-2">Pelanggan Baru</p>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newCustomer.name}
+                  onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Nama *"
+                  className="input-field text-sm"
+                />
+                <input
+                  type="text"
+                  value={newCustomer.phone}
+                  onChange={(e) => setNewCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="No. WA/HP"
+                  className="input-field text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="card p-4 space-y-3">
+            <h3 className="font-bold text-brand-950">Ringkasan</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-brand-500">Subtotal</span>
+                <span className="font-semibold text-brand-950">{formatRupiah(subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-brand-500">Diskon</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-brand-400">Rp</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={subtotal}
+                    value={discount || ""}
+                    onChange={(e) => setDiscount(Number(e.target.value) || 0)}
+                    className="w-24 text-right input-field py-1.5 text-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <hr className="border-brand-100" />
+              <div className="flex justify-between">
+                <span className="font-bold text-brand-950">Total</span>
+                <span className="text-lg font-bold text-brand-700">{formatRupiah(finalAmount)}</span>
+              </div>
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving || cart.length === 0 || discount > subtotal}
+              className="btn-primary w-full mt-2"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? "Menyimpan..." : "Simpan & Bayar"}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* ===== BOTTOM SHEET (Mobile Cart) ===== */}
+      <BottomSheet
+        isOpen={cart.length > 0}
+        onClose={() => {}}
+        collapsedLabel={
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-brand-600" />
+              <span className="text-sm font-bold text-brand-950">
+                {cartItemCount} item
+              </span>
+              <span className="text-xs text-brand-400">
+                ({formatRupiah(subtotal)})
+              </span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSave();
+              }}
+              disabled={saving}
+              className="btn-primary text-xs py-1.5 px-3"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+              Bayar
+            </button>
+          </div>
+        }
+      >
+        {/* Collapsed minimal view */}
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4 text-brand-600" />
+            <span className="text-sm font-bold text-brand-950">
+              {cartItemCount} item
+            </span>
+            <span className="text-xs text-brand-400">
+              ({formatRupiah(subtotal)})
+            </span>
+          </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              handleSave();
+            }}
+            disabled={saving}
+            className="btn-primary text-xs py-1.5 px-3"
+          >
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+            Bayar
+          </button>
+        </div>
+
+        {/* Expanded: cart items */}
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-3 mb-3">
+            <input
+              type="number"
+              min="0"
+              value={discount || ""}
+              onChange={(e) => setDiscount(Number(e.target.value) || 0)}
+              className="input-field flex-1 text-sm py-2"
+              placeholder="Diskon (Rp)"
+            />
+            <div className="text-right">
+              <p className="text-xs text-brand-500">Total</p>
+              <p className="text-base font-bold text-brand-700">{formatRupiah(finalAmount)}</p>
+            </div>
+          </div>
+
+          {cart.map((c) => (
+            <div key={c.book.id} className="flex items-center gap-2 py-2 px-3 rounded-xl bg-brand-50/60">
+              {c.book.cover_url ? (
+                <img
+                  src={c.book.cover_url}
+                  alt={c.book.title}
+                  className="w-8 h-10 rounded-lg object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-10 rounded-lg bg-brand-100 flex items-center justify-center shrink-0">
+                  <ImageOff className="w-3 h-3 text-brand-300" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-brand-950 truncate">{c.book.title}</p>
+                <p className="text-[10px] text-brand-500">{formatRupiah(c.book.price)}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => updateQty(c.book.id, -1)}
+                  className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="w-5 text-center text-xs font-bold text-brand-950">{c.quantity}</span>
+                <button
+                  onClick={() => updateQty(c.book.id, 1)}
+                  className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+              <span className="text-xs font-bold text-brand-700 w-16 text-right">
+                {formatRupiah(c.book.price * c.quantity)}
+              </span>
+              <button
+                onClick={() => removeFromCart(c.book.id)}
+                className="p-1 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-500"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+
+          {/* Customer di dalam sheet */}
+          <div className="mt-3 pt-3 border-t border-brand-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-brand-500">Pelanggan</span>
+              <button
+                onClick={() => setSelectedCustomer(null)}
+                className="text-xs text-brand-400 hover:text-brand-600"
+              >
+                {selectedCustomer?.name || "Umum"} {selectedCustomer && "✕"}
+              </button>
+            </div>
+            {!selectedCustomer && (
+              <input
+                type="text"
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Nama pelanggan (opsional)"
+                className="input-field text-sm py-2"
+              />
+            )}
+          </div>
+        </div>
+      </BottomSheet>
 
       {/* Payment Modal */}
       {showPayment && savedOrder && (
@@ -671,7 +925,7 @@ export default function NewOrderPage() {
                 </div>
               )}
               <div className="flex justify-between border-t border-brand-200 pt-2">
-                <span className="font-bold text-brand-950">Total (Netto)</span>
+                <span className="font-bold text-brand-950">Total</span>
                 <span className="text-xl font-black text-brand-700">{formatRupiah(savedOrder.final_amount)}</span>
               </div>
             </div>
