@@ -4,13 +4,12 @@ export const runtime = "edge";
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Book, Customer, CartItem, Order, OrderItem } from "@/types";
+import { Book, Customer, CartItem, Order, OrderItem, PaymentMethod } from "@/types";
 import { SearchBar } from "@/components/SearchBar";
 import { CategoryPicker } from "@/components/CategoryPicker";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
-import { BookSearchCard } from "@/components/BookSearchCard";
 import { formatRupiah } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -27,6 +26,10 @@ import {
   ImageOff,
   Loader2,
   ChevronUp,
+  Banknote,
+  QrCode,
+  ArrowRightLeft,
+  Phone,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -64,6 +67,7 @@ export default function NewOrderPage() {
   const [savedOrder, setSavedOrder] = useState<Order | null>(null);
   const [savedItems, setSavedItems] = useState<OrderItem[]>([]);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("tunai");
   const [showPayment, setShowPayment] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const changeAmount = Math.max(0, paymentAmount - (savedOrder?.final_amount || 0));
@@ -276,6 +280,9 @@ export default function NewOrderPage() {
           discount,
           final_amount: finalAmount,
           status: "completed",
+          payment_method: "tunai",
+          payment_status: "belum_bayar",
+          paid_amount: 0,
         })
         .select()
         .single();
@@ -316,13 +323,50 @@ export default function NewOrderPage() {
     }
   }
 
-  function handlePaymentSubmit() {
-    if (paymentAmount < (savedOrder?.final_amount || 0)) {
-      toast.error("Uang tidak mencukupi");
+  async function handlePaymentSubmit() {
+    if (!savedOrder) return;
+    const total = savedOrder.final_amount;
+    if (paymentAmount <= 0) {
+      toast.error("Masukkan jumlah pembayaran");
       return;
     }
-    setShowPayment(false);
-    setShowReceipt(true);
+
+    // Determine payment status
+    let status: "lunas" | "belum_bayar" | "belum_lunas";
+    if (paymentAmount >= total) {
+      status = "lunas";
+    } else if (paymentAmount > 0) {
+      status = "belum_lunas";
+    } else {
+      status = "belum_bayar";
+    }
+
+    try {
+      // Update order with payment info
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          payment_method: paymentMethod,
+          payment_status: status,
+          paid_amount: paymentAmount,
+        })
+        .eq("id", savedOrder.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setSavedOrder({
+        ...savedOrder,
+        payment_method: paymentMethod,
+        payment_status: status,
+        paid_amount: paymentAmount,
+      });
+
+      setShowPayment(false);
+      setShowReceipt(true);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menyimpan pembayaran");
+    }
   }
 
   function handleCloseReceipt() {
@@ -333,6 +377,7 @@ export default function NewOrderPage() {
     setSelectedCustomer(null);
     setDiscount(0);
     setPaymentAmount(0);
+    setPaymentMethod("tunai");
     setNewCustomer({ name: "", phone: "", email: "" });
     setShowAllCustomers(false);
     setCustomerSearch("");
@@ -344,10 +389,11 @@ export default function NewOrderPage() {
       <Receipt
         order={savedOrder}
         items={savedItems}
-        customerName={selectedCustomer?.name || "Pelanggan Umum"}
+        customerName={selectedCustomer?.name || newCustomer.name || "Pelanggan Umum"}
         paymentAmount={paymentAmount}
         changeAmount={changeAmount}
         onClose={handleCloseReceipt}
+        paymentMethod={paymentMethod}
       />
     );
   }
@@ -369,6 +415,103 @@ export default function NewOrderPage() {
 
       {/* --- MOBILE LAYOUT --- */}
       <div className="lg:hidden space-y-3">
+        {/* Customer section — DI ATAS, biar keliatan kalau keranjang banyak */}
+        <div className="card p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-brand-800 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-brand-600" />
+              Pelanggan
+            </span>
+            <button
+              onClick={() => {
+                if (showAllCustomers) {
+                  setShowAllCustomers(false);
+                  setCustomerSearch("");
+                } else {
+                  fetchAllCustomers();
+                }
+                setSelectedCustomer(null);
+              }}
+              className="text-xs font-semibold text-brand-600"
+            >
+              {selectedCustomer ? "Ganti" : "Pilih"}
+            </button>
+          </div>
+
+          {selectedCustomer ? (
+            <div className="bg-brand-50 rounded-xl p-2.5 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-brand-950">{selectedCustomer.name}</p>
+                <p className="text-[10px] text-brand-500">{selectedCustomer.phone}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setShowAllCustomers(false);
+                }}
+                className="text-xs text-red-400"
+              >
+                Hapus
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Nama pelanggan *"
+                className="input-field text-sm py-2"
+              />
+              <input
+                type="tel"
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="No. WA/HP *"
+                className="input-field text-sm py-2"
+              />
+              <input
+                type="email"
+                value={newCustomer.email}
+                onChange={(e) => setNewCustomer((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="Email (opsional)"
+                className="input-field text-sm py-2"
+              />
+            </div>
+          )}
+
+          {showAllCustomers && (
+            <div className="space-y-2">
+              <SearchBar
+                value={customerSearch}
+                onChange={setCustomerSearch}
+                placeholder="Cari nama..."
+              />
+              <div className="border border-brand-100 rounded-xl divide-y divide-brand-50 max-h-48 overflow-y-auto">
+                {filteredAllCustomers.length === 0 ? (
+                  <p className="p-3 text-xs text-brand-400 text-center">Tidak ditemukan</p>
+                ) : (
+                  filteredAllCustomers.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setSelectedCustomer(c);
+                        setShowAllCustomers(false);
+                        setCustomerSearch("");
+                        setNewCustomer({ name: "", phone: "", email: "" });
+                      }}
+                      className="w-full p-2.5 text-left hover:bg-brand-50/60"
+                    >
+                      <p className="text-sm font-semibold text-brand-950">{c.name}</p>
+                      <p className="text-[10px] text-brand-500">{c.phone}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Search + Kategori */}
         <div className="card p-3 space-y-2">
           <CategoryPicker
@@ -897,23 +1040,23 @@ export default function NewOrderPage() {
         </div>
       </BottomSheet>
 
-      {/* Payment Modal */}
+      {/* Payment Modal — 3 metode + opsi bayar */}
       {showPayment && savedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-scale-in">
-          <div className="bg-white rounded-3xl shadow-float max-w-sm w-full p-6">
-            <div className="flex items-center gap-3 mb-6">
+          <div className="bg-white rounded-3xl shadow-float max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-5">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-emerald-600" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-brand-950">Pesanan Tersimpan</h2>
+                <h2 className="text-lg font-bold text-brand-950">Pembayaran</h2>
                 <p className="text-sm text-brand-500">
                   #{savedOrder.id.slice(0, 8).toUpperCase()}
                 </p>
               </div>
             </div>
 
-            <div className="bg-brand-50 rounded-2xl p-4 mb-5">
+            <div className="bg-brand-50 rounded-2xl p-4 mb-4">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-brand-500">Brutto</span>
                 <span className="font-semibold text-brand-800">{formatRupiah(savedOrder.total_amount)}</span>
@@ -930,6 +1073,45 @@ export default function NewOrderPage() {
               </div>
             </div>
 
+            {/* Metode Pembayaran — 3 tombol menyamping */}
+            <p className="text-xs font-bold text-brand-800 mb-2">Metode Pembayaran</p>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <button
+                onClick={() => setPaymentMethod("tunai")}
+                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                  paymentMethod === "tunai"
+                    ? "border-brand-600 bg-brand-50 text-brand-700"
+                    : "border-brand-100 text-brand-400 hover:border-brand-300"
+                }`}
+              >
+                <Banknote className="w-5 h-5" />
+                <span className="text-[11px] font-bold">Tunai</span>
+              </button>
+              <button
+                onClick={() => setPaymentMethod("qris")}
+                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                  paymentMethod === "qris"
+                    ? "border-brand-600 bg-brand-50 text-brand-700"
+                    : "border-brand-100 text-brand-400 hover:border-brand-300"
+                }`}
+              >
+                <QrCode className="w-5 h-5" />
+                <span className="text-[11px] font-bold">QRIS</span>
+              </button>
+              <button
+                onClick={() => setPaymentMethod("transfer")}
+                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                  paymentMethod === "transfer"
+                    ? "border-brand-600 bg-brand-50 text-brand-700"
+                    : "border-brand-100 text-brand-400 hover:border-brand-300"
+                }`}
+              >
+                <ArrowRightLeft className="w-5 h-5" />
+                <span className="text-[11px] font-bold">Transfer</span>
+              </button>
+            </div>
+
+            {/* Jumlah Dibayar */}
             <div className="space-y-3">
               <label className="label flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-brand-500" />
@@ -941,27 +1123,67 @@ export default function NewOrderPage() {
                 </span>
                 <input
                   type="number"
-                  min={savedOrder.final_amount}
+                  min={0}
                   value={paymentAmount || ""}
                   onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
                   className="input-field pl-10 text-lg font-bold"
-                  placeholder={`Min. ${formatRupiah(savedOrder.final_amount)}`}
+                  placeholder="0"
                   autoFocus
                 />
               </div>
+
+              {/* Quick buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPaymentAmount(savedOrder.final_amount)}
+                  className="flex-1 text-xs font-bold py-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
+                >
+                  Lunas ({formatRupiah(savedOrder.final_amount)})
+                </button>
+                <button
+                  onClick={() => setPaymentAmount(0)}
+                  className="flex-1 text-xs font-bold py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
+                >
+                  Belum Bayar
+                </button>
+              </div>
+
+              {/* Status preview */}
               {paymentAmount > 0 && (
-                <div className="flex justify-between text-sm px-1">
-                  <span className="text-brand-500">Kembali</span>
-                  <span className="font-bold text-brand-700">
+                <div className="flex justify-between items-center text-sm px-1">
+                  <span className="text-brand-500">
+                    {paymentAmount >= savedOrder.final_amount ? "Kembalian" : "Sisa hutang"}
+                  </span>
+                  <span className={`font-bold ${
+                    paymentAmount >= savedOrder.final_amount ? "text-brand-700" : "text-amber-600"
+                  }`}>
                     {paymentAmount >= savedOrder.final_amount
                       ? formatRupiah(paymentAmount - savedOrder.final_amount)
-                      : formatRupiah(0)}
+                      : formatRupiah(savedOrder.final_amount - paymentAmount)
+                    }
                   </span>
                 </div>
               )}
+
+              {/* Status badge preview */}
+              <div className="flex justify-center">
+                {paymentAmount <= 0 ? (
+                  <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
+                    ● Belum Bayar
+                  </span>
+                ) : paymentAmount >= savedOrder.final_amount ? (
+                  <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                    ● Lunas
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                    ● Belum Lunas
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-3 mt-5">
               <button
                 onClick={() => {
                   setShowPayment(false);
@@ -974,11 +1196,10 @@ export default function NewOrderPage() {
               </button>
               <button
                 onClick={handlePaymentSubmit}
-                disabled={paymentAmount < savedOrder.final_amount}
                 className="btn-primary flex-1"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Bayar
+                Konfirmasi
               </button>
             </div>
           </div>

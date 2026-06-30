@@ -26,6 +26,9 @@ export interface Customer {
   updated_at: string;
 }
 
+export type PaymentMethod = "tunai" | "qris" | "transfer";
+export type PaymentStatus = "lunas" | "belum_bayar" | "belum_lunas";
+
 export interface Order {
   id: string;
   customer_id: string | null;
@@ -35,6 +38,9 @@ export interface Order {
   final_amount: number;
   status: "completed" | "pending" | "cancelled";
   notes: string | null;
+  payment_method: PaymentMethod | null;
+  payment_status: PaymentStatus | null;
+  paid_amount: number | null;
   created_at: string;
 }
 
@@ -68,14 +74,13 @@ export interface DashboardStats {
   lowStockBooks: Book[];
 }
 
-// API search response
 export interface BookSearchResult {
-  id: string; // unique key for selection
+  id: string;
   title: string;
   author: string;
   year: number | null;
   isbn: string | null;
   publisher: string | null;
-  coverUrl: string | null; // original URL from Google/OpenLibrary
+  coverUrl: string | null;
   source: "google" | "openlibrary";
 }

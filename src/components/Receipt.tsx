@@ -154,8 +154,18 @@ export function Receipt({
     }
   }, []);
 
-  const paidAmount = paymentAmount > 0 ? paymentAmount : order.final_amount;
-  const change = paymentAmount > 0 ? changeAmount : 0;
+  const paidAmount = order.paid_amount ?? (paymentAmount > 0 ? paymentAmount : order.final_amount);
+  const change = paidAmount > order.final_amount ? paidAmount - order.final_amount : 0;
+  const remaining = order.final_amount - paidAmount;
+
+  // Payment status display
+  const payStatus = order.payment_status || (paidAmount >= order.final_amount ? "lunas" : "belum_bayar");
+  const statusConfig = {
+    lunas: { label: "LUNAS", color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
+    belum_bayar: { label: "BELUM BAYAR", color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
+    belum_lunas: { label: "BELUM LUNAS", color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+  };
+  const st = statusConfig[payStatus] || statusConfig.lunas;
 
   const dateFormatted = order.created_at
     ? new Date(order.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
@@ -317,14 +327,33 @@ export function Receipt({
                 <span className="text-sm font-bold text-brand-800 uppercase tracking-wider">Total</span>
                 <span className="text-lg font-black text-brand-700">{formatRupiah(order.final_amount)}</span>
               </div>
+
+              {/* Status pembayaran badge */}
+              <div className={`mt-2 mb-1 ${st.bg} ${st.border} border rounded-lg px-3 py-1.5 flex items-center justify-between`}>
+                <span className={`text-[11px] font-bold ${st.color} uppercase tracking-wider`}>
+                  ● {st.label}
+                </span>
+                <span className="text-[11px] font-semibold text-brand-600">
+                  {paymentMethod}
+                </span>
+              </div>
+
               <div className="flex justify-between text-[13px]">
-                <span className="text-brand-500">Bayar</span>
+                <span className="text-brand-500">Dibayar</span>
                 <span className="font-semibold text-brand-700">{formatRupiah(paidAmount)}</span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-brand-500">Kembalian</span>
-                <span className="font-bold text-brand-800">{formatRupiah(change)}</span>
-              </div>
+              {change > 0 && (
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-brand-500">Kembalian</span>
+                  <span className="font-bold text-brand-800">{formatRupiah(change)}</span>
+                </div>
+              )}
+              {remaining > 0 && (
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-amber-600 font-semibold">Sisa Hutang</span>
+                  <span className="font-bold text-amber-700">{formatRupiah(remaining)}</span>
+                </div>
+              )}
             </div>
 
             {/* ── Divider ── */}
