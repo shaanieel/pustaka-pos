@@ -109,12 +109,17 @@ export default function OrdersPage() {
 
   async function markAsLunas(orderId: string) {
     try {
-      const { error } = await supabase
-        .from("orders")
-        .update({ payment_status: "lunas", paid_amount: orders.find(o => o.id === orderId)?.final_amount })
-        .eq("id", orderId);
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_status: "lunas" }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Update gagal");
+      }
+
       toast.success("Status diperbarui jadi LUNAS ✅");
       loadOrders();
     } catch {
@@ -246,8 +251,9 @@ export default function OrdersPage() {
 
               return (
                 <div key={order.id} className="card p-4 animate-fade-in-up">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 min-w-0">
+                  {/* Row 1: Customer info + amount */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
                         {order.status === "completed" ? (
                           <CircleCheck className="w-5 h-5 text-emerald-500" />
@@ -267,40 +273,38 @@ export default function OrdersPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {/* Payment status badge */}
-                      <PayBadge status={ps} />
-
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-brand-700">
-                          {formatRupiah(order.final_amount)}
+                    <div className="text-right shrink-0">
+                      <p className="text-base font-bold text-brand-700">
+                        {formatRupiah(order.final_amount)}
+                      </p>
+                      {order.discount > 0 && (
+                        <p className="text-[11px] text-brand-400">
+                          Diskon {formatRupiah(order.discount)}
                         </p>
-                        {order.discount > 0 && (
-                          <p className="text-[11px] text-brand-400">
-                            Diskon {formatRupiah(order.discount)}
-                          </p>
-                        )}
-                      </div>
+                      )}
+                    </div>
+                  </div>
 
-                      {/* Mark as lunas */}
+                  {/* Row 2: Status badge + actions */}
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-brand-100">
+                    <PayBadge status={ps} />
+                    <div className="flex items-center gap-2">
                       {showMarkLunas && (
                         <button
                           onClick={() => markAsLunas(order.id)}
-                          className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
-                          title="Tandai Lunas"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs font-bold transition-colors"
                         >
                           <CircleCheck className="w-4 h-4" />
+                          Tandai Lunas
                         </button>
                       )}
-
-                      {/* View receipt */}
                       {order.status === "completed" && (
                         <button
                           onClick={() => viewReceipt(order)}
-                          className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors"
-                          title="Lihat Struk"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-bold transition-colors"
                         >
                           <Eye className="w-4 h-4" />
+                          Struk
                         </button>
                       )}
                     </div>
