@@ -74,8 +74,8 @@ export function BookCard({ book, onDelete }: BookCardProps) {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        {/* Actions — always visible on mobile, hover-reveal on desktop */}
+        <div className="flex flex-col gap-1.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200">
           <Link
             href={`/books/${book.id}/edit`}
             className="p-2 rounded-lg hover:bg-brand-50 text-brand-500 hover:text-brand-700 transition-colors"

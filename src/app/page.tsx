@@ -140,11 +140,11 @@ export default function DashboardPage() {
             <div className="space-y-2">
               {stats!.recentOrders.slice(0, 5).map((order) => (
                 <div key={order.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-brand-50/60 transition-colors">
-                  <div>
-                    <p className="text-sm font-semibold text-brand-900">{order.customer_name || "Pelanggan Umum"}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-brand-900 truncate">{order.customer_name || "Pelanggan Umum"}</p>
                     <p className="text-xs text-brand-400">{formatDate(order.created_at)}</p>
                   </div>
-                  <span className="text-sm font-bold text-brand-700">{formatRupiah(order.final_amount)}</span>
+                  <span className="text-sm font-bold text-brand-700 ml-2 shrink-0">{formatRupiah(order.final_amount)}</span>
                 </div>
               ))}
             </div>
@@ -165,11 +165,11 @@ export default function DashboardPage() {
             <div className="space-y-2">
               {stats!.lowStockBooks.map((book) => (
                 <div key={book.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-amber-50/60 transition-colors">
-                  <div>
-                    <p className="text-sm font-semibold text-brand-900 truncate max-w-[180px]">{book.title}</p>
-                    <p className="text-xs text-brand-400">{book.author}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-brand-900 truncate">{book.title}</p>
+                    <p className="text-xs text-brand-400 truncate">{book.author}</p>
                   </div>
-                  <span className="badge-warning">{book.stock === 0 ? "Habis" : `Sisa ${book.stock}`}</span>
+                  <span className="badge-warning shrink-0 ml-2">{book.stock === 0 ? "Habis" : `Sisa ${book.stock}`}</span>
                 </div>
               ))}
             </div>

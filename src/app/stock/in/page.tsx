@@ -190,7 +190,7 @@ export default function StockInPage() {
                 {entries.map((entry) => (
                   <div
                     key={entry.isbn}
-                    className="flex items-center justify-between py-3 px-4 rounded-xl bg-brand-50/60"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 px-4 rounded-xl bg-brand-50/60"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-brand-950 truncate">
@@ -223,7 +223,7 @@ export default function StockInPage() {
                       >
                         <Plus className="w-4 h-4" />
                       </button>
-                      <span className="text-sm font-bold text-emerald-600 w-20 text-right">
+                      <span className="text-sm font-bold text-emerald-600 w-12 sm:w-20 text-right">
                         +{entry.addQty}
                       </span>
                       <button
