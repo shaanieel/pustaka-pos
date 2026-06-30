@@ -30,6 +30,7 @@ import {
   QrCode,
   ArrowRightLeft,
   Phone,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1059,10 +1060,10 @@ export default function NewOrderPage() {
       {/* Payment Modal — 3 metode + opsi bayar */}
       {showPayment && savedOrder && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4 animate-scale-in">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-float w-full sm:max-w-sm max-h-[92vh] sm:max-h-[90vh] flex flex-col">
+          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-float w-full sm:max-w-sm h-[92dvh] sm:max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="flex items-center gap-3 p-5 pb-0 shrink-0">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+            <div className="flex items-center gap-3 px-5 pt-5 pb-3 shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-6 h-6 text-emerald-600" />
               </div>
               <div className="flex-1 min-w-0">
@@ -1071,10 +1072,17 @@ export default function NewOrderPage() {
                   #{savedOrder.id.slice(0, 8).toUpperCase()}
                 </p>
               </div>
+              <button
+                onClick={() => { setShowPayment(false); setSavedOrder(null); setSavedItems([]); }}
+                className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Scrollable content */}
-            <div className="overflow-y-auto overscroll-contain px-5 py-4 flex-1 min-h-0">
+            {/* Scrollable content — fills remaining space */}
+            <div className="overflow-y-auto overscroll-contain px-5 flex-1 min-h-0">
+              {/* Summary */}
               <div className="bg-brand-50 rounded-2xl p-4 mb-4">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-brand-500">Brutto</span>
@@ -1092,7 +1100,7 @@ export default function NewOrderPage() {
                 </div>
               </div>
 
-              {/* Metode Pembayaran — 3 tombol menyamping */}
+              {/* Metode Pembayaran */}
               <p className="text-xs font-bold text-brand-800 mb-2">Metode Pembayaran</p>
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <button
@@ -1131,15 +1139,13 @@ export default function NewOrderPage() {
               </div>
 
               {/* Jumlah Dibayar */}
-              <div className="space-y-3">
+              <div className="space-y-3 pb-3">
                 <label className="label flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-brand-500" />
                   Jumlah Dibayar
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-400 font-semibold">
-                    Rp
-                  </span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-400 font-semibold">Rp</span>
                   <input
                     type="number"
                     min={0}
@@ -1151,26 +1157,20 @@ export default function NewOrderPage() {
                   />
                 </div>
 
-                {/* Quick buttons — compact */}
+                {/* Quick buttons */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPaymentAmount(savedOrder.final_amount)}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
-                  >
-                    Lunas
-                  </button>
+                  >Lunas</button>
                   <button
                     onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all"
-                  >
-                    Bayar Setengah
-                  </button>
+                  >Bayar Setengah</button>
                   <button
                     onClick={() => setPaymentAmount(0)}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
-                  >
-                    Belum Bayar
-                  </button>
+                  >Belum Bayar</button>
                 </div>
 
                 {/* Status preview */}
@@ -1190,37 +1190,25 @@ export default function NewOrderPage() {
                   </div>
                 )}
 
-                {/* Status badge preview */}
+                {/* Status badge */}
                 <div className="flex justify-center">
                   {paymentAmount <= 0 ? (
-                    <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
-                      ● Belum Bayar
-                    </span>
+                    <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">● Belum Bayar</span>
                   ) : paymentAmount >= savedOrder.final_amount ? (
-                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                      ● Lunas
-                    </span>
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">● Lunas</span>
                   ) : (
-                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
-                      ● Belum Lunas
-                    </span>
+                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">● Belum Lunas</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Bottom buttons — always visible */}
-            <div className="flex gap-3 p-5 pt-3 shrink-0 border-t border-brand-100">
+            {/* Bottom buttons — fixed at bottom */}
+            <div className="flex gap-3 px-5 py-4 shrink-0 border-t border-brand-100 bg-white rounded-b-3xl">
               <button
-                onClick={() => {
-                  setShowPayment(false);
-                  setSavedOrder(null);
-                  setSavedItems([]);
-                }}
+                onClick={() => { setShowPayment(false); setSavedOrder(null); setSavedItems([]); }}
                 className="btn-secondary flex-1"
-              >
-                Batal
-              </button>
+              >Batal</button>
               <button
                 onClick={handlePaymentSubmit}
                 className="btn-primary flex-1"
