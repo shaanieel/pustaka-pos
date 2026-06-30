@@ -1059,9 +1059,9 @@ export default function NewOrderPage() {
 
       {/* Payment Modal — 3 metode + opsi bayar */}
       {showPayment && savedOrder && (
-        <div className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center bg-white sm:bg-black/40 sm:backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[60] flex flex-col sm:items-center sm:justify-center bg-white sm:bg-black/40 sm:backdrop-blur-sm animate-fade-in">
           {/* Mobile: full screen, Desktop: card */}
-          <div className="flex flex-col w-full h-full sm:max-w-sm sm:max-h-[90vh] sm:h-auto sm:rounded-3xl sm:shadow-float sm:bg-white overflow-hidden">
+          <div className="flex flex-col w-full h-full max-h-dvh sm:max-w-sm sm:max-h-[90vh] sm:h-auto sm:rounded-3xl sm:shadow-float sm:bg-white overflow-hidden">
             {/* Header */}
             <div className="flex items-center gap-3 px-5 pt-5 pb-3 shrink-0 sm:px-5 sm:pt-5 sm:pb-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
