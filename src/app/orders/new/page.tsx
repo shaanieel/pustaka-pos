@@ -1059,10 +1059,11 @@ export default function NewOrderPage() {
 
       {/* Payment Modal — 3 metode + opsi bayar */}
       {showPayment && savedOrder && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4 animate-scale-in">
-          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-float w-full sm:max-w-sm h-[92dvh] sm:max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center bg-white sm:bg-black/40 sm:backdrop-blur-sm animate-fade-in">
+          {/* Mobile: full screen, Desktop: card */}
+          <div className="flex flex-col w-full h-full sm:max-w-sm sm:max-h-[90vh] sm:h-auto sm:rounded-3xl sm:shadow-float sm:bg-white overflow-hidden">
             {/* Header */}
-            <div className="flex items-center gap-3 px-5 pt-5 pb-3 shrink-0">
+            <div className="flex items-center gap-3 px-5 pt-5 pb-3 shrink-0 sm:px-5 sm:pt-5 sm:pb-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-6 h-6 text-emerald-600" />
               </div>
@@ -1080,8 +1081,8 @@ export default function NewOrderPage() {
               </button>
             </div>
 
-            {/* Scrollable content — fills remaining space */}
-            <div className="overflow-y-auto overscroll-contain px-5 flex-1 min-h-0">
+            {/* Scrollable content */}
+            <div className="overflow-y-auto overscroll-contain px-5 flex-1 min-h-0 pb-2">
               {/* Summary */}
               <div className="bg-brand-50 rounded-2xl p-4 mb-4">
                 <div className="flex justify-between text-sm mb-2">
@@ -1156,24 +1157,17 @@ export default function NewOrderPage() {
                     autoFocus
                   />
                 </div>
-
-                {/* Quick buttons */}
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setPaymentAmount(savedOrder.final_amount)}
+                  <button onClick={() => setPaymentAmount(savedOrder.final_amount)}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
                   >Lunas</button>
-                  <button
-                    onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
+                  <button onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all"
                   >Bayar Setengah</button>
-                  <button
-                    onClick={() => setPaymentAmount(0)}
+                  <button onClick={() => setPaymentAmount(0)}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all"
                   >Belum Bayar</button>
                 </div>
-
-                {/* Status preview */}
                 {paymentAmount > 0 && (
                   <div className="flex justify-between items-center text-sm px-1">
                     <span className="text-brand-500">
@@ -1189,8 +1183,6 @@ export default function NewOrderPage() {
                     </span>
                   </div>
                 )}
-
-                {/* Status badge */}
                 <div className="flex justify-center">
                   {paymentAmount <= 0 ? (
                     <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">● Belum Bayar</span>
@@ -1203,16 +1195,12 @@ export default function NewOrderPage() {
               </div>
             </div>
 
-            {/* Bottom buttons — fixed at bottom */}
-            <div className="flex gap-3 px-5 py-4 shrink-0 border-t border-brand-100 bg-white rounded-b-3xl">
-              <button
-                onClick={() => { setShowPayment(false); setSavedOrder(null); setSavedItems([]); }}
+            {/* Bottom buttons */}
+            <div className="flex gap-3 px-5 py-4 shrink-0 border-t border-brand-100 bg-white">
+              <button onClick={() => { setShowPayment(false); setSavedOrder(null); setSavedItems([]); }}
                 className="btn-secondary flex-1"
               >Batal</button>
-              <button
-                onClick={handlePaymentSubmit}
-                className="btn-primary flex-1"
-              >
+              <button onClick={handlePaymentSubmit} className="btn-primary flex-1">
                 <CheckCircle2 className="w-4 h-4" />
                 Konfirmasi
               </button>
