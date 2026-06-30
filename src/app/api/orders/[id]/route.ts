@@ -13,39 +13,77 @@ function getAdmin() {
   });
 }
 
-// PATCH /api/orders/[id] — update order payment status
+// GET /api/orders/[id] — fetch single order with items
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const admin = getAdmin();
+
+    const { data: order, error: orderErr } = await admin
+      .from("orders")
+      .select("*")
+      .eq("id", params.id)
+      .single();
+
+    if (orderErr) {
+      return NextResponse.json({ error: orderErr.message }, { status: 500 });
+    }
+
+    const { data: items, error: itemsErr } = await admin
+      .from("order_items")
+      .select("*")
+      .eq("order_id", params.id);
+
+    if (itemsErr) {
+      return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ order, items: items || [] });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Internal error" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/orders/[id] — update order fields
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const body = await req.json();
-    const { payment_status, paid_amount } = body;
-
-    if (!payment_status) {
-      return NextResponse.json(
-        { error: "payment_status required" },
-        { status: 400 }
-      );
-    }
-
     const admin = getAdmin();
 
-    // Get order to find final_amount if paid_amount not provided
-    let updateData: Record<string, unknown> = { payment_status };
+    // Build update object from provided fields
+    const updateData: Record<string, unknown> = {};
 
-    if (payment_status === "lunas") {
-      // If paid_amount provided use it, else fetch order's final_amount
-      if (paid_amount != null) {
-        updateData.paid_amount = paid_amount;
-      } else {
-        const { data: order } = await admin
-          .from("orders")
-          .select("final_amount")
-          .eq("id", params.id)
-          .single();
-        updateData.paid_amount = order?.final_amount ?? 0;
+    if (body.customer_name !== undefined) updateData.customer_name = body.customer_name;
+    if (body.payment_method !== undefined) updateData.payment_method = body.payment_method;
+    if (body.payment_status !== undefined) updateData.payment_status = body.payment_status;
+    if (body.paid_amount !== undefined) updateData.paid_amount = body.paid_amount;
+    if (body.discount !== undefined) updateData.discount = body.discount;
+    if (body.notes !== undefined) updateData.notes = body.notes;
+
+    // Auto-calculate paid_amount based on status if not explicitly provided
+    if (body.payment_status && body.paid_amount === undefined) {
+      const { data: order } = await admin
+        .from("orders")
+        .select("final_amount")
+        .eq("id", params.id)
+        .single();
+
+      const finalAmount = order?.final_amount ?? 0;
+
+      if (body.payment_status === "lunas") {
+        updateData.paid_amount = finalAmount;
+      } else if (body.payment_status === "belum_bayar") {
+        updateData.paid_amount = 0;
       }
+      // untuk belum_lunas, biarkan paid_amount seperti apa adanya
     }
 
     const { data, error } = await admin

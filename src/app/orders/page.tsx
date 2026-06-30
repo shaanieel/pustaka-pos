@@ -11,7 +11,7 @@ import { formatRupiah, formatDate } from "@/lib/utils";
 import {
   Plus, ReceiptText, CircleCheck, Clock, XCircle, Eye,
   ChevronDown, Filter, Banknote, TrendingUp, ShoppingCart,
-  CheckCircle2, AlertTriangle
+  CheckCircle2, AlertTriangle, Pencil
 } from "lucide-react";
 import Link from "next/link";
 import { clsx } from "clsx";
@@ -289,6 +289,14 @@ export default function OrdersPage() {
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-brand-100">
                     <PayBadge status={ps} />
                     <div className="flex items-center gap-2">
+                      {/* Edit button — always visible */}
+                      <Link
+                        href={`/orders/${order.id}/edit`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-bold transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </Link>
                       {showMarkLunas && (
                         <button
                           onClick={() => markAsLunas(order.id)}
