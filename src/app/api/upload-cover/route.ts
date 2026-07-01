@@ -22,7 +22,7 @@ const r2 = new AwsClient({
 });
 
 const IMAGE_SERVICE_URL =
-  process.env.IMAGE_SERVICE_URL || "http://127.0.0.1:8000";
+  process.env.IMAGE_SERVICE_URL || "https://supreme-interval-alt-expected.trycloudflare.com";
 
 function genKey(contentType: string, filename?: string): string {
   const ext = contentType.includes("png")
