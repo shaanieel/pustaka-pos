@@ -1,0 +1,25 @@
+# Image Processing Service — Python dependencies
+# PustakaPOS AI Image Pipeline
+# 
+# Install: pip install -r requirements.txt
+# Run: python main.py (starts FastAPI on localhost:8000)
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# AI Background Removal (BiRefNet)
+# rembg provides BiRefNet model support
+rembg[gpu]>=2.0.50
+
+# Image processing
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Cloudflare R2 (S3-compatible)
+boto3>=1.28.0
+
+# Note: PyTorch must be installed separately with CUDA support:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# rembg[gpu] will use CUDA automatically if torch+cuda is available.

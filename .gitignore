@@ -7,3 +7,10 @@ out/
 # Source assets
 /Logo/
 /contoh-struk/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.log
+image-service/*.log
