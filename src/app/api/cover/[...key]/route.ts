@@ -5,11 +5,10 @@ import { AwsClient } from "aws4fetch";
 
 export const runtime = "edge";
 
-const R2_ACCOUNT_ID = "5f3c24963db02b0b6a73df072d2675e2";
-const R2_ACCESS_KEY_ID = "5612ca8b1d07639a96a0b8d49a47349d";
-const R2_SECRET_ACCESS_KEY =
-  "aaa17675146e84798a748d641e663669a05f762639bce4fe3c90ab563843bdab";
-const R2_BUCKET = "poster-buku";
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
+const R2_BUCKET = process.env.R2_BUCKET || "poster-buku";
 const R2_BASE = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}`;
 
 const r2 = new AwsClient({
