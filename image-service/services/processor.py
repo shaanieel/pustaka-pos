@@ -84,20 +84,26 @@ class ImageProcessingService:
             alpha_matting=True,
             alpha_matting_foreground_threshold=240,
             alpha_matting_background_threshold=10,
-            alpha_matting_erode_size=5,
+            alpha_matting_erode_size=8,
         )
         
         with open(output_path, "wb") as f:
             f.write(output_bytes)
         
+        # Clean up semi-transparent edge pixels (alpha < 50 → fully transparent)
+        img = Image.open(output_path).convert("RGBA")
+        arr = np.array(img)
+        low_alpha = arr[:, :, 3] < 50
+        arr[low_alpha, 3] = 0
+        img = Image.fromarray(arr, "RGBA")
+        img.save(output_path)
+        
         return output_path
     
-    def auto_crop_and_center(self, input_path: str, output_path: str, padding_ratio: float = 0.05) -> str:
+    def auto_crop_and_center(self, input_path: str, output_path: str, padding_ratio: float = 0.0) -> str:
         """
-        Auto-crop image to content bounding box and center it.
+        Auto-crop image to content bounding box — TIGHT, no padding, no canvas.
         
-        Detects non-transparent pixels (after bg removal) and crops
-        to the bounding box. Adds consistent padding for uniform margins.
         
         Args:
             input_path: Path to input PNG (with transparency)
@@ -140,16 +146,8 @@ class ImageProcessingService:
         cmax = min(img.width, cmax + pad_w)
         
         cropped = img.crop((cmin, rmin, cmax, rmax))
-        # Center on transparent canvas (preserve alpha for later resize)
-        max_dim = max(cropped.width, cropped.height)
-        canvas_size = int(max_dim * 1.1)
-        canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
-        
-        offset_x = (canvas_size - cropped.width) // 2
-        offset_y = (canvas_size - cropped.height) // 2
-        canvas.paste(cropped, (offset_x, offset_y), cropped)
-        
-        canvas.save(output_path)
+        # Just save the cropped book — no canvas, no centering, no extra space
+        cropped.save(output_path)
         return output_path
     
     def auto_enhance(self, input_path: str, output_path: str) -> str:
@@ -194,50 +192,42 @@ class ImageProcessingService:
     
     def resize(self, input_path: str, output_path: str, target_w: int = 1000, target_h: int = 1500) -> str:
         """
-        Resize image to target dimensions with proper aspect ratio.
-        Uses LETTERBOX with subtle background blur instead of white padding.
+        Resize image to fit within target dimensions — NO canvas, NO padding.
+        Just proportionally scale down, keep transparency.
         """
         logger.info(f"resize: {input_path} → {output_path} ({target_w}x{target_h})")
         
         img = Image.open(input_path).convert("RGBA")
+        
+        # Just scale down proportionally — no canvas, no background
         img.thumbnail((target_w, target_h), Image.Resampling.LANCZOS)
         
-        # Create a subtle background: blurred & darkened version of the image
-        bg = img.copy()
-        bg.thumbnail((target_w // 4, target_h // 4), Image.Resampling.LANCZOS)
-        bg = bg.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=30))
-        bg_arr = np.array(bg)
-        bg_arr = (bg_arr * 0.4).astype(np.uint8)  # darken
-        bg = Image.fromarray(bg_arr, "RGBA").convert("RGB")
-        
-        # Paste image on blurred background (with alpha mask if available)
-        offset_x = (target_w - img.width) // 2
-        offset_y = (target_h - img.height) // 2
-        if img.mode == "RGBA":
-            img_rgb = img.convert("RGB")
-            bg.paste(img_rgb, (offset_x, offset_y), img.split()[3])
-        else:
-            bg.paste(img, (offset_x, offset_y))
-        
-        bg.save(output_path, quality=95)
+        img.save(output_path, quality=95)
         return output_path
     
     def convert_to_webp(self, input_path: str, output_path: str, quality: int = 85) -> str:
         """
         Convert image to WebP format with specified quality.
+        Preserves alpha channel if present.
         """
         logger.info(f"convert_to_webp: {input_path} → {output_path} (q={quality})")
         
-        img = Image.open(input_path).convert("RGB")
+        img = Image.open(input_path)
+        if img.mode == "RGBA":
+            img = img.convert("RGBA")
+        else:
+            img = img.convert("RGB")
         
-        img.save(
-            output_path,
-            format="WEBP",
-            quality=quality,
-            method=6,
-            lossless=False,
-        )
+        save_kwargs = {
+            "format": "WEBP",
+            "quality": quality,
+            "method": 6,
+            "lossless": False,
+        }
+        if img.mode == "RGBA":
+            save_kwargs["lossless"] = True
+        
+        img.save(output_path, **save_kwargs)
         
         file_size_kb = os.path.getsize(output_path) / 1024
         if file_size_kb > 200:

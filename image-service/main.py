@@ -167,6 +167,15 @@ async def process_image(file: UploadFile = File(...)):
             r2_key = f"covers/{job_id}_{int(time.time())}.webp"
             r2_url = uploader.upload_with_retry(output_path, r2_key, max_retries=3)
             logger.info(f"[{job_id}] Uploaded to R2: {r2_url}")
+            
+            # Simpan salinan lokal agar bisa dikirim via Telegram
+            local_cache_dir = r"D:\.hermes\profiles\agent1-shino\image_cache"
+            os.makedirs(local_cache_dir, exist_ok=True)
+            local_cache = os.path.join(local_cache_dir, f"processed_{job_id}.webp")
+            import shutil
+            shutil.copy2(output_path, local_cache)
+            logger.info(f"[{job_id}] Local cache saved: {local_cache}")
+            
             yield send_event("r2_upload", "Uploaded to R2!", {"url": r2_url})
             
             # Step 8: Cleanup temp files
