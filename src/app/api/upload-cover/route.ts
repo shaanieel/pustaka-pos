@@ -85,14 +85,29 @@ export async function POST(request: Request) {
       const imgBlob = await imgRes.blob();
       const originalBuffer = await imgBlob.arrayBuffer();
       const ext = imgBlob.type.includes("png") ? "png" : imgBlob.type.includes("webp") ? "webp" : "jpg";
-      const key = filename
+      const r2Key = filename
         ? `${filename}.${ext}`
         : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
       // Upload langsung ke R2 (tanpa AI pipeline untuk Google Books cover)
-      const result = await uploadToR2(originalBuffer, imgBlob.type, key);
-      if ("error" in result) return Response.json(result, { status: 500 });
-      return Response.json({ ...result, processed: false });
+      const r2FetchUrl = `${R2_BASE}/${r2Key}`;
+      const r2Res = await r2.fetch(r2FetchUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": imgBlob.type || "image/jpeg",
+          "Content-Length": String(originalBuffer.byteLength),
+        },
+        body: originalBuffer,
+      });
+      if (!r2Res.ok) {
+        const errText = await r2Res.text().catch(() => "");
+        return Response.json(
+          { error: `R2 upload: HTTP ${r2Res.status}`, detail: errText.slice(0, 300) },
+          { status: 500 }
+        );
+      }
+      const proxyUrl = `/api/cover/${r2Key}`;
+      return Response.json({ url: proxyUrl, key: r2Key, processed: false });
     } catch (e: any) {
       return Response.json(
         { error: `JSON upload failed: ${e.message}` },
