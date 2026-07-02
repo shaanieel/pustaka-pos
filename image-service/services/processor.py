@@ -140,9 +140,10 @@ class ImageProcessingService:
         cmax = min(img.width, cmax + pad_w)
         
         cropped = img.crop((cmin, rmin, cmax, rmax))
+        # Center on transparent canvas (preserve alpha for later resize)
         max_dim = max(cropped.width, cropped.height)
         canvas_size = int(max_dim * 1.1)
-        canvas = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255, 255))
+        canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
         
         offset_x = (canvas_size - cropped.width) // 2
         offset_y = (canvas_size - cropped.height) // 2
@@ -154,43 +155,72 @@ class ImageProcessingService:
     def auto_enhance(self, input_path: str, output_path: str) -> str:
         """
         Auto-enhance image: brightness, contrast, saturation, sharpen.
+        Preserves alpha channel (enhance RGB only).
         """
         logger.info(f"auto_enhance: {input_path} → {output_path}")
         
-        img = Image.open(input_path).convert("RGB")
-        arr = np.array(img)
+        img = Image.open(input_path)
+        has_alpha = img.mode == "RGBA"
+        
+        if has_alpha:
+            # Split alpha, enhance RGB only
+            r, g, b, a = img.split()
+            img_rgb = Image.merge("RGB", (r, g, b))
+        else:
+            img_rgb = img.convert("RGB")
+        
+        arr = np.array(img_rgb)
         mean_brightness = arr.mean()
         
         if mean_brightness < 100:
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.15)
+            enhancer = ImageEnhance.Brightness(img_rgb)
+            img_rgb = enhancer.enhance(1.15)
         
-        enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.15)
+        enhancer = ImageEnhance.Contrast(img_rgb)
+        img_rgb = enhancer.enhance(1.15)
         
-        enhancer = ImageEnhance.Color(img)
-        img = enhancer.enhance(1.10)
+        enhancer = ImageEnhance.Color(img_rgb)
+        img_rgb = enhancer.enhance(1.10)
         
-        img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=80, threshold=2))
+        img_rgb = img_rgb.filter(ImageFilter.UnsharpMask(radius=1, percent=80, threshold=2))
         
-        img.save(output_path, quality=95)
+        if has_alpha:
+            # Merge back alpha
+            img_rgb = img_rgb.convert("RGBA")
+            img_rgb.putalpha(a)
+        
+        img_rgb.save(output_path, quality=95)
         return output_path
     
     def resize(self, input_path: str, output_path: str, target_w: int = 1000, target_h: int = 1500) -> str:
         """
         Resize image to target dimensions with proper aspect ratio.
+        Uses LETTERBOX with subtle background blur instead of white padding.
         """
         logger.info(f"resize: {input_path} → {output_path} ({target_w}x{target_h})")
         
-        img = Image.open(input_path).convert("RGB")
+        img = Image.open(input_path).convert("RGBA")
         img.thumbnail((target_w, target_h), Image.Resampling.LANCZOS)
         
-        canvas = Image.new("RGB", (target_w, target_h), (255, 255, 255))
+        # Create a subtle background: blurred & darkened version of the image
+        bg = img.copy()
+        bg.thumbnail((target_w // 4, target_h // 4), Image.Resampling.LANCZOS)
+        bg = bg.resize((target_w, target_h), Image.Resampling.LANCZOS)
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=30))
+        bg_arr = np.array(bg)
+        bg_arr = (bg_arr * 0.4).astype(np.uint8)  # darken
+        bg = Image.fromarray(bg_arr, "RGBA").convert("RGB")
+        
+        # Paste image on blurred background (with alpha mask if available)
         offset_x = (target_w - img.width) // 2
         offset_y = (target_h - img.height) // 2
-        canvas.paste(img, (offset_x, offset_y))
+        if img.mode == "RGBA":
+            img_rgb = img.convert("RGB")
+            bg.paste(img_rgb, (offset_x, offset_y), img.split()[3])
+        else:
+            bg.paste(img, (offset_x, offset_y))
         
-        canvas.save(output_path, quality=95)
+        bg.save(output_path, quality=95)
         return output_path
     
     def convert_to_webp(self, input_path: str, output_path: str, quality: int = 85) -> str:
