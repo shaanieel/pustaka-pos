@@ -68,10 +68,43 @@ async function uploadToR2(
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") || "";
 
-  // ── Hanya terima FormData ──
+  // ── JSON mode: download image dari URL, terus proses ──
+  if (contentType.includes("application/json")) {
+    try {
+      const body = await request.json();
+      const { imageUrl, filename } = body;
+      if (!imageUrl) {
+        return Response.json({ error: "imageUrl required" }, { status: 400 });
+      }
+
+      // Download image dari URL eksternal
+      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
+      if (!imgRes.ok) {
+        throw new Error(`Download failed: HTTP ${imgRes.status}`);
+      }
+      const imgBlob = await imgRes.blob();
+      const originalBuffer = await imgBlob.arrayBuffer();
+      const ext = imgBlob.type.includes("png") ? "png" : imgBlob.type.includes("webp") ? "webp" : "jpg";
+      const key = filename
+        ? `${filename}.${ext}`
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+      // Upload langsung ke R2 (tanpa AI pipeline untuk Google Books cover)
+      const result = await uploadToR2(originalBuffer, imgBlob.type, key);
+      if ("error" in result) return Response.json(result, { status: 500 });
+      return Response.json({ ...result, processed: false });
+    } catch (e: any) {
+      return Response.json(
+        { error: `JSON upload failed: ${e.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  // ── FormData mode ──
   if (!contentType.includes("multipart/form-data")) {
     return Response.json(
-      { error: "Hanya menerima FormData upload" },
+      { error: "Hanya menerima multipart/form-data atau application/json" },
       { status: 400 }
     );
   }
