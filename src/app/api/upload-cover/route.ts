@@ -183,8 +183,13 @@ export async function POST(request: Request) {
           }
 
           if (r2Url) {
-            console.log(`✅ Image Service selesai: ${r2Url}`);
-            return Response.json({ url: r2Url, processed: true });
+            // Convert R2 public URL ke proxy URL
+            // "https://pub-xxx.r2.dev/poster-buku/covers/abc.webp" → "/api/cover/covers/abc.webp"
+            const proxyUrl = r2Url.includes("/poster-buku/")
+              ? `/api/cover/${r2Url.split("/poster-buku/")[1]}`
+              : r2Url;
+            console.log(`✅ Image Service selesai: ${r2Url} → proxy: ${proxyUrl}`);
+            return Response.json({ url: proxyUrl, processed: true });
           }
         }
       }
