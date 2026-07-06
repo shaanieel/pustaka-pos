@@ -7,6 +7,11 @@ import { MobileNav } from "@/components/MobileNav";
 export const metadata: Metadata = {
   title: "Bunayya Putra — Grosir Al-Qur'an & Buku Islam",
   description: "Aplikasi kasir modern — Grosir Al-Qur'an dan Buku-Buku Islam",
+  icons: {
+    icon: "https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/favicon.ico",
+    shortcut: "https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/favicon-32.png",
+    apple: "https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/favicon-32.png",
+  },
 };
 
 export const viewport: Viewport = {

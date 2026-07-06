@@ -8,7 +8,6 @@ import {
   ShoppingCart,
   Users,
   PlusCircle,
-  BookMarked,
   ReceiptText,
   PackageOpen,
   ImageIcon,
@@ -34,8 +33,12 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-6 pt-7 pb-6 border-b border-brand-50">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-md shadow-brand-200 group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
-            <BookMarked className="w-5 h-5 text-white" />
+          <div className="h-10 rounded-xl bg-white flex items-center justify-center shadow-md shadow-brand-200 group-hover:shadow-lg group-hover:scale-105 transition-all duration-200 px-1">
+            <img
+              src="https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/logo-sidebar.png"
+              alt="Bunayya Putra"
+              className="h-8 w-auto object-contain"
+            />
           </div>
           <div>
             <h1 className="text-lg font-bold text-brand-900 tracking-tight leading-tight">
