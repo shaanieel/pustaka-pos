@@ -25,6 +25,7 @@ export default function EditBookPage() {
   const [form, setForm] = useState({
     title: "", author: "", isbn: "", price: "", stock: "",
     category: "", publisher: "", cover_url: "", year: "", book_code: "",
+    description: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,6 +53,7 @@ export default function EditBookPage() {
           cover_url: data.cover_url || "",
           year: data.year ? String(data.year) : "",
           book_code: data.book_code || "",
+          description: data.description || "",
         });
       }
     } catch (err: any) {
@@ -165,6 +167,7 @@ export default function EditBookPage() {
           cover_url: form.cover_url.trim() || null,
           year: form.year ? parseInt(form.year) : null,
           book_code: form.book_code.trim() || null,
+          description: form.description.trim() || null,
         })
         .eq("id", bookId);
       if (error) throw error;
@@ -280,6 +283,15 @@ export default function EditBookPage() {
             <input type="text" className="input-field" value={form.publisher}
               onChange={(e) => updateField("publisher", e.target.value)} />
           </div>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">Deskripsi Singkat</label>
+          <textarea
+            className="input-field h-16 resize-none"
+            placeholder="Deskripsi 1-2 baris..."
+            value={form.description}
+            onChange={(e) => updateField("description", e.target.value)}
+          />
         </div>
         <div className="flex gap-3 pt-2">
           <Link href="/books" className="btn-secondary flex-1">Batal</Link>

@@ -67,7 +67,7 @@ export function CoverUploader({
 
         // 3. Kirim ke server — AI pipeline + upload R2
         setStage("processing");
-        setStageMsg("Memproses AI — remove bg, crop, enhance...");
+        setStageMsg("Mengompres gambar...");
 
         const formData = new FormData();
         formData.append("file", compressed, "cover.jpg");
@@ -191,8 +191,8 @@ export function CoverUploader({
   const getStageIndicator = () => {
     const stages: { key: Stage; label: string }[] = [
       { key: "compressing", label: "Mengompres" },
-      { key: "processing", label: "AI Processing" },
-      { key: "uploading", label: "Selesai" },
+      { key: "processing", label: "Mengompres" },
+      { key: "uploading", label: "Upload R2" },
     ];
 
     const currentIdx = stages.findIndex((s) => s.key === stage);

@@ -1,8 +1,5 @@
 // POST /api/upload-cover
-// 1. Kirim file ke Python Image Service (port 8000)
-// 2. Image service: remove bg → crop → enhance → resize → WebP → upload R2
-// 3. Balikin URL R2 ke client
-// 4. Fallback: kalau service mati, upload langsung ke R2
+// Upload cover langsung ke R2 (tanpa AI pipeline)
 import { AwsClient } from "aws4fetch";
 
 export const runtime = "edge";
@@ -136,71 +133,7 @@ export async function POST(request: Request) {
 
     const originalBuffer = await file.arrayBuffer();
 
-    // ── Coba lewat Image Service (SSE) ──
-    try {
-      const bgFormData = new FormData();
-      bgFormData.append(
-        "file",
-        new Blob([originalBuffer], { type: file.type }),
-        "input.jpg"
-      );
-
-      const res = await fetch(`${IMAGE_SERVICE_URL}/process`, {
-        method: "POST",
-        body: bgFormData,
-        signal: AbortSignal.timeout(120000), // 2 menit timeout (full pipeline)
-      });
-
-      if (res.ok) {
-        // Read SSE stream sampai dapat event "done"
-        const reader = res.body?.getReader();
-        if (reader) {
-          let buffer = "";
-          let r2Url: string | null = null;
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += new TextDecoder().decode(value);
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                try {
-                  const event = JSON.parse(line.slice(6));
-                  console.log(
-                    `[ImageService ${event.job_id}] ${event.step}: ${event.message}`
-                  );
-
-                  if (event.step === "done" && event.url) {
-                    r2Url = event.url;
-                  }
-                } catch {}
-              }
-            }
-          }
-
-          if (r2Url) {
-            // Convert R2 public URL ke proxy URL
-            // "https://pub-xxx.r2.dev/poster-buku/covers/abc.webp" → "/api/cover/covers/abc.webp"
-            const proxyUrl = r2Url.includes("/poster-buku/")
-              ? `/api/cover/${r2Url.split("/poster-buku/")[1]}`
-              : r2Url;
-            console.log(`✅ Image Service selesai: ${r2Url} → proxy: ${proxyUrl}`);
-            return Response.json({ url: proxyUrl, processed: true });
-          }
-        }
-      }
-
-      // Kalau SSE selesai tapi gak dapet URL → fallback
-      console.warn("⚠️ Image Service selesai tanpa URL — fallback ke direct upload");
-    } catch (svcErr: any) {
-      console.warn(`⚠️ Image Service error: ${svcErr.message} — fallback ke direct upload`);
-    }
-
-    // ── Fallback: upload langsung ke R2 ──
+    // ── Upload langsung ke R2 (no AI pipeline) ──
     const result = await uploadToR2(originalBuffer, "image/jpeg", filename);
     if ("error" in result) return Response.json(result, { status: 500 });
 

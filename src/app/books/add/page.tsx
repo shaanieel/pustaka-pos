@@ -34,6 +34,7 @@ export default function AddBookPage() {
   const [form, setForm] = useState({
     title: "", author: "", isbn: "", price: "", stock: "10",
     category: "", publisher: "", cover_url: "", year: "", book_code: "",
+    description: "",
   });
   const [saving, setSaving] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -229,6 +230,7 @@ export default function AddBookPage() {
         cover_url: form.cover_url.trim() || null,
         year: form.year ? parseInt(form.year) : null,
         book_code: bookCode,
+        description: form.description.trim() || null,
       }).select("id").single();
 
       if (error) throw error;
@@ -305,7 +307,7 @@ export default function AddBookPage() {
   }
 
   function clearForm() {
-    setForm({ title: "", author: "", isbn: "", price: "", stock: "10", category: "", publisher: "", cover_url: "", year: "", book_code: "" });
+    setForm({ title: "", author: "", isbn: "", price: "", stock: "10", category: "", publisher: "", cover_url: "", year: "", book_code: "", description: "" });
   }
 
   return (
@@ -440,6 +442,15 @@ export default function AddBookPage() {
                   <span className="text-[10px] font-normal text-brand-400 uppercase tracking-wide">auto</span>
                 )}
               </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Deskripsi Singkat</label>
+              <textarea
+                className="input-field h-16 resize-none"
+                placeholder="Deskripsi 1-2 baris... (opsional)"
+                value={form.description}
+                onChange={(e) => updateField("description", e.target.value)}
+              />
             </div>
             <div className="sm:col-span-2">
               <GenrePicker
