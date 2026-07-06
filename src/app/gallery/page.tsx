@@ -122,7 +122,7 @@ export default function GalleryAdminPage() {
       try {
         const pf = pendingFiles[i];
         const ext = pf.file.name.split(".").pop();
-        const fileName = `gallery/${activeTab}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const fileName = `${activeTab}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("gallery")
