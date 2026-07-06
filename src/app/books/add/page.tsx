@@ -10,6 +10,7 @@ import { BookSearchCard } from "@/components/BookSearchCard";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
 import { GenrePicker } from "@/components/GenrePicker";
+import { PriceInput } from "@/components/PriceInput";
 import { BarcodeLabel } from "@/components/BarcodeLabel";
 import { getCategoryPrefix } from "@/lib/categories";
 import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus, Hash, Barcode } from "lucide-react";
@@ -422,9 +423,13 @@ export default function AddBookPage() {
                 value={form.publisher} onChange={(e) => updateField("publisher", e.target.value)} />
             </div>
             <div>
-              <label className="label">Harga (Rp) *</label>
-              <input type="number" className="input-field" placeholder="75000" min="0"
-                value={form.price} onChange={(e) => updateField("price", e.target.value)} required />
+              <PriceInput
+                label="Harga (Rp) *"
+                placeholder="75000"
+                value={form.price}
+                onChange={(v) => updateField("price", v)}
+                required
+              />
             </div>
             <div>
               <label className="label">Stok</label>
@@ -459,8 +464,10 @@ export default function AddBookPage() {
                   setGenreIds(ids);
                   setGenreSelections(selections);
                   // Auto-gen book_code from first subgenre
-                  if (selections.length > 0 && !form.book_code) {
+                  if (selections.length > 0) {
                     generateBookCodeFromGenre(selections[0].subgenre_name);
+                  } else {
+                    updateField("book_code", "");
                   }
                 }}
               />

@@ -11,6 +11,7 @@ import {
   BookMarked,
   ReceiptText,
   PackageOpen,
+  ImageIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/orders/new", label: "Pesanan Baru", icon: ShoppingCart },
   { href: "/stock/in", label: "Stok Masuk", icon: PackageOpen },
   { href: "/customers", label: "Pelanggan", icon: Users },
+  { href: "/gallery", label: "Galeri", icon: ImageIcon },
 ];
 
 export function Sidebar() {

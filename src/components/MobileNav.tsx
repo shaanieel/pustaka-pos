@@ -9,6 +9,7 @@ import {
   Users,
   Plus,
   Clock,
+  Image as ImageIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -18,6 +19,7 @@ const navItems = [
   // Center: floating add button (not in the map, rendered separately)
   { href: "/orders", label: "Riwayat", icon: Clock },
   { href: "/customers", label: "Pelanggan", icon: Users },
+  { href: "/gallery", label: "Galeri", icon: ImageIcon },
 ];
 
 export function MobileNav() {

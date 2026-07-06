@@ -6,16 +6,17 @@ export const runtime = "edge";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Save, Trash2, ScanLine, Hash, Barcode } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Hash, Barcode } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { BarcodeLabel } from "@/components/BarcodeLabel";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
-import { CategoryPicker } from "@/components/CategoryPicker";
-import { deleteCoverFromR2 } from "@/lib/compress";
+import { GenrePicker } from "@/components/GenrePicker";
+import { PriceInput } from "@/components/PriceInput";
 import { getCategoryPrefix } from "@/lib/categories";
+import { deleteCoverFromR2 } from "@/lib/compress";
 
 export default function EditBookPage() {
   const router = useRouter();
@@ -32,6 +33,12 @@ export default function EditBookPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
 
+  // Genre state for edit
+  const [genreIds, setGenreIds] = useState<number[]>([]);
+  const [genreSelections, setGenreSelections] = useState<
+    { subgenre_id: number; genre_name: string; subgenre_name: string }[]
+  >([]);
+
   useEffect(() => {
     loadBook();
   }, [bookId]);
@@ -39,7 +46,7 @@ export default function EditBookPage() {
   async function loadBook() {
     try {
       const { data, error } = await supabase
-        .from("books").select("*").eq("id", bookId).single();
+        .from("books").select("*, book_genres(subgenre_id)").eq("id", bookId).single();
       if (error) throw error;
       if (data) {
         setForm({
@@ -55,6 +62,11 @@ export default function EditBookPage() {
           book_code: data.book_code || "",
           description: data.description || "",
         });
+        // Load genre IDs
+        if (data.book_genres) {
+          const ids = data.book_genres.map((bg: any) => bg.subgenre_id);
+          setGenreIds(ids);
+        }
       }
     } catch (err: any) {
       toast.error("Buku tidak ditemukan");
@@ -64,7 +76,7 @@ export default function EditBookPage() {
     }
   }
 
-  // ── SCAN BARCODE HANDLER (Model 1: Edit Buku) ──
+  // ── SCAN BARCODE HANDLER ──
   const handleScannedISBN = useCallback(async (isbn: string) => {
     toast.loading(`Mencari buku ISBN: ${isbn}...`, { id: "scan-search" });
     try {
@@ -114,10 +126,9 @@ export default function EditBookPage() {
     }
   }, []);
 
-  // ── AUTO-GENERATE BOOK CODE dari kategori ──
-  async function generateBookCode(category: string) {
-    if (!category) return;
-    const prefix = getCategoryPrefix(category);
+  // ── AUTO-GENERATE BOOK CODE dari subgenre ──
+  async function generateBookCodeFromGenre(subgenreName: string) {
+    const prefix = getCategoryPrefix(subgenreName);
     try {
       const { data } = await supabase
         .from("books")
@@ -136,18 +147,12 @@ export default function EditBookPage() {
       const nextNum = maxNum + 1;
       updateField("book_code", `${prefix}${String(nextNum).padStart(4, "0")}`);
     } catch {
-      // silent
+      updateField("book_code", `${prefix}0001`);
     }
   }
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
-    if (field === "category") {
-      // Only auto-generate if book_code is currently empty or starts with old prefix
-      const prefix = getCategoryPrefix(value);
-      if (!value) return;
-      generateBookCode(value);
-    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -160,9 +165,9 @@ export default function EditBookPage() {
           title: form.title.trim(),
           author: form.author.trim(),
           isbn: form.isbn.trim() || null,
-          price: parseFloat(form.price),
+          price: parseFloat(form.price) || 0,
           stock: parseInt(form.stock) || 0,
-          category: form.category.trim() || null,
+          category: genreSelections.map((s) => s.subgenre_name).join(", "),
           publisher: form.publisher.trim() || null,
           cover_url: form.cover_url.trim() || null,
           year: form.year ? parseInt(form.year) : null,
@@ -171,6 +176,19 @@ export default function EditBookPage() {
         })
         .eq("id", bookId);
       if (error) throw error;
+
+      // Update book_genres junction
+      if (genreIds.length > 0) {
+        // Delete existing
+        await supabase.from("book_genres").delete().eq("book_id", bookId);
+        // Insert new
+        const genreInserts = genreIds.map((sid) => ({
+          book_id: bookId,
+          subgenre_id: sid,
+        }));
+        await supabase.from("book_genres").insert(genreInserts);
+      }
+
       toast.success("Buku berhasil diperbarui!");
       router.push("/books");
     } catch (err: any) {
@@ -182,9 +200,7 @@ export default function EditBookPage() {
 
   async function handleDelete() {
     try {
-      // Hapus cover dari R2 dulu
       if (form.cover_url) await deleteCoverFromR2(form.cover_url);
-
       const { error } = await supabase.from("books").delete().eq("id", bookId);
       if (error) throw error;
       toast.success("Buku dihapus");
@@ -219,7 +235,6 @@ export default function EditBookPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
-        {/* Cover Uploader */}
         <CoverUploader
           currentCover={form.cover_url}
           filename={form.isbn || form.title.replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40)}
@@ -254,9 +269,13 @@ export default function EditBookPage() {
             </div>
           </div>
           <div>
-            <label className="label">Harga (Rp) *</label>
-            <input type="number" className="input-field" min="0" value={form.price}
-              onChange={(e) => updateField("price", e.target.value)} required />
+            <PriceInput
+              label="Harga (Rp) *"
+              placeholder="75000"
+              value={form.price}
+              onChange={(v) => updateField("price", v)}
+              required
+            />
           </div>
           <div>
             <label className="label">Stok</label>
@@ -269,19 +288,31 @@ export default function EditBookPage() {
               Kode Buku
             </label>
             <div className={`input-field flex items-center justify-between ${form.book_code ? "bg-brand-50 font-bold text-brand-700" : "text-brand-400"}`}>
-              <span>{form.book_code || "Pilih kategori dulu"}</span>
+              <span>{form.book_code || "Pilih genre dulu"}</span>
               {form.book_code && (
                 <span className="text-[10px] font-normal text-brand-400 uppercase tracking-wide">auto</span>
               )}
             </div>
           </div>
           <div>
-            <CategoryPicker value={form.category} onChange={(v) => updateField("category", v)} />
-          </div>
-          <div>
             <label className="label">Penerbit</label>
             <input type="text" className="input-field" value={form.publisher}
               onChange={(e) => updateField("publisher", e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <GenrePicker
+              selectedIds={genreIds}
+              onChange={(ids, selections) => {
+                setGenreIds(ids);
+                setGenreSelections(selections);
+                // Auto-gen book_code from first subgenre
+                if (selections.length > 0) {
+                  generateBookCodeFromGenre(selections[0].subgenre_name);
+                } else {
+                  updateField("book_code", "");
+                }
+              }}
+            />
           </div>
         </div>
         <div className="sm:col-span-2">
@@ -302,22 +333,23 @@ export default function EditBookPage() {
         </div>
       </form>
 
-      {/* Barcode Label Section (Code 128 — memanjang) */}
-      <div className="card p-6 space-y-4">
-        <div>
-          <h2 className="font-semibold text-brand-800 flex items-center gap-2">
-            <Barcode className="w-4 h-4" />
-            Label Barcode Buku
-          </h2>
-          <p className="text-xs text-brand-400 mt-1">
-            Print & tempel di buku — scan di kasir untuk transaksi cepat
-          </p>
+      {form.book_code && (
+        <div className="card p-6 space-y-4">
+          <div>
+            <h2 className="font-semibold text-brand-800 flex items-center gap-2">
+              <Barcode className="w-4 h-4" />
+              Label Barcode Buku
+            </h2>
+            <p className="text-xs text-brand-400 mt-1">
+              Print & tempel di buku — scan di kasir untuk transaksi cepat
+            </p>
+          </div>
+          <BarcodeLabel
+            value={form.book_code || bookId}
+            label={form.title}
+          />
         </div>
-        <BarcodeLabel
-          value={form.book_code || bookId}
-          label={form.title}
-        />
-      </div>
+      )}
 
       <ConfirmModal
         open={showDelete}

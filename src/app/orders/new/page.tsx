@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Book, Customer, CartItem, Order, OrderItem, PaymentMethod } from "@/types";
 import { SearchBar } from "@/components/SearchBar";
-import { CategoryPicker } from "@/components/CategoryPicker";
+import { GenrePicker } from "@/components/GenrePicker";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
@@ -60,6 +60,9 @@ export default function NewOrderPage() {
   // Category filter
   const [selectedCategory, setSelectedCategory] = useState("");
 
+  // Genre filter (multi-select)
+  const [genreFilterIds, setGenreFilterIds] = useState<number[]>([]);
+
   // Discount
   const [discount, setDiscount] = useState(0);
 
@@ -97,9 +100,22 @@ export default function NewOrderPage() {
       b.title.toLowerCase().includes(bookSearch.toLowerCase()) ||
       (b.author && b.author.toLowerCase().includes(bookSearch.toLowerCase())) ||
       (b.isbn && b.isbn.includes(bookSearch));
-    const matchCategory = !selectedCategory || b.category === selectedCategory;
+    const matchCategory =
+      genreFilterIds.length === 0 ||
+      (b.category &&
+        b.category.split(", ").some((cat) =>
+          genreSelectionsData.some(
+            (s: { subgenre_name: string }) =>
+              cat.toLowerCase() === s.subgenre_name.toLowerCase()
+          )
+        ));
     return matchSearch && matchCategory;
   });
+
+  // Helper: store genre selections for filtering
+  const [genreSelectionsData, setGenreSelectionsData] = useState<
+    { subgenre_id: number; genre_name: string; subgenre_name: string }[]
+  >([]);
 
   // ── SCAN BARCODE ── (cari ISBN ATAU book_code)
   const handleScannedISBN = useCallback(async (code: string) => {
@@ -535,11 +551,15 @@ export default function NewOrderPage() {
 
         {/* Search + Kategori */}
         <div className="card p-3 space-y-2">
-          <CategoryPicker
-            value={selectedCategory}
-            onChange={(cat) => setSelectedCategory(cat)}
-            compact
-            showAllOption
+          <GenrePicker
+            selectedIds={genreFilterIds}
+            onChange={(ids, selections) => {
+              setGenreFilterIds(ids);
+              setGenreSelectionsData(selections);
+              if (ids.length === 0) setSelectedCategory("");
+              else setSelectedCategory(selections.map((s) => s.subgenre_name).join(", "));
+            }}
+            label="Filter Genre"
           />
           <div className="flex gap-2">
             <div className="flex-1">
@@ -636,11 +656,15 @@ export default function NewOrderPage() {
         <div className="lg:col-span-2 space-y-4">
           <div className="card p-4 space-y-3">
             <label className="label">Cari Buku</label>
-            <CategoryPicker
-              value={selectedCategory}
-              onChange={(cat) => setSelectedCategory(cat)}
-              compact
-              showAllOption
+            <GenrePicker
+              selectedIds={genreFilterIds}
+              onChange={(ids, selections) => {
+                setGenreFilterIds(ids);
+                setGenreSelectionsData(selections);
+                if (ids.length === 0) setSelectedCategory("");
+                else setSelectedCategory(selections.map((s) => s.subgenre_name).join(", "));
+              }}
+              label="Filter Genre"
             />
             <div className="flex gap-2">
               <div className="flex-1">
