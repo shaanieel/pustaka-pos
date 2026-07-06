@@ -122,34 +122,25 @@ export default function GalleryAdminPage() {
       try {
         const pf = pendingFiles[i];
         const ext = pf.file.name.split(".").pop();
-        const fileName = `${activeTab}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("gallery")
-          .upload(fileName, pf.file, {
-            cacheControl: "31536000",
-            upsert: false,
-          });
+        // Upload via API route (pake service key — bypass RLS)
+        const formData = new FormData();
+        formData.append("file", pf.file);
+        formData.append("type", activeTab);
+        formData.append("caption", pf.caption.trim());
+        formData.append("sort_order", String(maxOrder + i + 1));
 
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { data: urlData } = supabase.storage
-          .from("gallery")
-          .getPublicUrl(fileName);
-
-        const imageUrl = urlData?.publicUrl || "";
-        if (!imageUrl) throw new Error("Gagal mendapatkan URL foto");
-
-        const { error: dbError } = await supabase.from("gallery_items").insert({
-          type: activeTab,
-          image_url: imageUrl,
-          caption: pf.caption.trim() || null,
-          sort_order: maxOrder + i + 1,
+        const uploadRes = await fetch("/api/upload-gallery", {
+          method: "POST",
+          body: formData,
         });
 
-        if (dbError) throw dbError;
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json().catch(() => ({}));
+          throw new Error(errData.error || errData.detail || `HTTP ${uploadRes.status}`);
+        }
+
+        const result = await uploadRes.json();
 
         // Mark as done
         setPendingFiles((prev) => {
