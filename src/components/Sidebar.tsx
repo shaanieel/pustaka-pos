@@ -35,7 +35,7 @@ export function Sidebar() {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="h-10 rounded-xl bg-white flex items-center justify-center shadow-md shadow-brand-200 group-hover:shadow-lg group-hover:scale-105 transition-all duration-200 px-1">
             <img
-              src="https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/logo-sidebar.png"
+              src="https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/logo-admin.png"
               alt="Bunayya Putra"
               className="h-8 w-auto object-contain"
             />
