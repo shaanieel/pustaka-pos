@@ -9,7 +9,7 @@ import { BookSearchResult } from "@/types";
 import { BookSearchCard } from "@/components/BookSearchCard";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
-import { CategoryPicker } from "@/components/CategoryPicker";
+import { GenrePicker } from "@/components/GenrePicker";
 import { BarcodeLabel } from "@/components/BarcodeLabel";
 import { getCategoryPrefix } from "@/lib/categories";
 import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus, Hash, Barcode } from "lucide-react";
@@ -37,6 +37,12 @@ export default function AddBookPage() {
   });
   const [saving, setSaving] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
+
+  // Genre state (multi-select)
+  const [genreIds, setGenreIds] = useState<number[]>([]);
+  const [genreSelections, setGenreSelections] = useState<
+    { subgenre_id: number; genre_name: string; subgenre_name: string }[]
+  >([]);
 
   // ── Auto-trigger ISBN search dari URL (?isbn=...) ──
   useEffect(() => {
@@ -212,19 +218,31 @@ export default function AddBookPage() {
         bookCode = await generateGenericBookCode();
       }
 
-      const { error } = await supabase.from("books").insert({
+      const { data: insertedBook, error } = await supabase.from("books").insert({
         title: form.title.trim(),
         author: form.author.trim(),
         isbn: form.isbn.trim() || null,
         price: parseFloat(form.price),
         stock: parseInt(form.stock) || 0,
-        category: form.category.trim() || null,
+        category: genreSelections.map((s) => s.subgenre_name).join(", "),
         publisher: form.publisher.trim() || null,
         cover_url: form.cover_url.trim() || null,
         year: form.year ? parseInt(form.year) : null,
         book_code: bookCode,
-      });
+      }).select("id").single();
+
       if (error) throw error;
+
+      // Save book_genres junction
+      const bookId = insertedBook?.id;
+      if (bookId && genreIds.length > 0) {
+        const genreInserts = genreIds.map((sid) => ({
+          book_id: bookId,
+          subgenre_id: sid,
+        }));
+        await supabase.from("book_genres").insert(genreInserts);
+      }
+
       toast.success("Buku berhasil ditambahkan!");
       router.push("/books");
     } catch (err: any) {
@@ -234,15 +252,10 @@ export default function AddBookPage() {
     }
   }
 
-  // ── AUTO-GENERATE BOOK CODE dari kategori ──
-  async function generateBookCode(category: string) {
-    if (!category) {
-      updateField("book_code", "");
-      return;
-    }
-    const prefix = getCategoryPrefix(category);
+  // ── AUTO-GENERATE BOOK CODE dari genre subgenre
+  async function generateBookCodeFromGenre(subgenreName: string) {
+    const prefix = getCategoryPrefix(subgenreName);
     try {
-      // Cari semua book_code dengan prefix ini, ambil nomor terbesar
       const { data } = await supabase
         .from("books")
         .select("book_code")
@@ -261,17 +274,12 @@ export default function AddBookPage() {
       const code = `${prefix}${String(nextNum).padStart(4, "0")}`;
       updateField("book_code", code);
     } catch {
-      // Fallback: tetap kasih prefix + 0001
       updateField("book_code", `${prefix}0001`);
     }
   }
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
-    // Auto-generate book code pas kategori dipilih
-    if (field === "category") {
-      generateBookCode(value);
-    }
   }
 
   // ── AUTO-GENERATE GENERIC BOOK CODE (tanpa kategori) ──
@@ -433,8 +441,18 @@ export default function AddBookPage() {
                 )}
               </div>
             </div>
-            <div>
-              <CategoryPicker value={form.category} onChange={(v) => updateField("category", v)} />
+            <div className="sm:col-span-2">
+              <GenrePicker
+                selectedIds={genreIds}
+                onChange={(ids, selections) => {
+                  setGenreIds(ids);
+                  setGenreSelections(selections);
+                  // Auto-gen book_code from first subgenre
+                  if (selections.length > 0 && !form.book_code) {
+                    generateBookCodeFromGenre(selections[0].subgenre_name);
+                  }
+                }}
+              />
             </div>
           </div>
 
