@@ -181,20 +181,33 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d")!;
-    const imageData = ctx.getImageData(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
 
+    // Use a temp canvas to extract the cropped region cleanly (no overlay artifacts)
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = cropRect.w;
+    tempCanvas.height = cropRect.h;
+    const tempCtx = tempCanvas.getContext("2d")!;
+    tempCtx.drawImage(
+      canvas,
+      cropRect.x, cropRect.y, cropRect.w, cropRect.h,
+      0, 0, cropRect.w, cropRect.h
+    );
+
+    // Update main canvas
     canvas.width = cropRect.w;
     canvas.height = cropRect.h;
-    ctx.putImageData(imageData, 0, 0);
+    ctx.drawImage(tempCanvas, 0, 0);
 
     setCropRect(null);
     setActiveTool("none");
 
-    // Update image ref so further edits work on cropped version
+    // Wait for image load before setting state (prevents naturalWidth=0 glitch)
     const newImg = new Image();
+    newImg.onload = () => {
+      setImage(newImg);
+      setRotation(0);
+    };
     newImg.src = canvas.toDataURL();
-    setImage(newImg);
-    setRotation(0);
   };
 
   // Handle save — synchronous blob extraction to avoid timing issues
