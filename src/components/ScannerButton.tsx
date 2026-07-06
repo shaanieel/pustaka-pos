@@ -40,15 +40,12 @@ export function ScannerButton({
           aspectRatio: 2,
         },
         (decodedText) => {
-          // Only accept ISBN-like barcodes (EAN-13 = 13 digits, EAN-8 = 8 digits)
+          // Accept ALL barcode formats (ISBN, book_code, dll)
           const raw = decodedText.replace(/[-\s]/g, "");
-          if (/^\d{8}$|^\d{13}$/.test(raw)) {
-            setLastScanned(raw);
-            stopScanner(scanner);
-            onScan(raw);
-            setOpen(false);
-          }
-          // Ignore non-ISBN codes silently — user keeps scanning
+          setLastScanned(raw);
+          stopScanner(scanner);
+          onScan(raw);
+          setOpen(false);
         },
         () => {
           // onScanFailure — silent, keep scanning

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Camera, Upload, X, Loader2, Sparkles, CheckCircle2 } from "lucide-react";
+import { Camera, Upload, X, Loader2, Sparkles, CheckCircle2, Edit3 } from "lucide-react";
 import toast from "react-hot-toast";
 import { compressImage, deleteCoverFromR2 } from "@/lib/compress";
+import { CoverEditor } from "./CoverEditor";
 
 interface CoverUploaderProps {
   currentCover: string;
@@ -23,6 +24,21 @@ export function CoverUploader({
   const [stage, setStage] = useState<Stage>("idle");
   const [stageMsg, setStageMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Editor state
+  const [editorFile, setEditorFile] = useState<File | Blob | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+
+  // Handle file after editor
+  const handleEditedFile = useCallback(
+    (blob: Blob) => {
+      setShowEditor(false);
+      setEditorFile(null);
+      uploadToR2(blob, "edited");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentCover, filename, onCoverChange]
+  );
 
   const uploadToR2 = useCallback(
     async (file: File | Blob, source: string) => {
@@ -95,6 +111,12 @@ export function CoverUploader({
     [currentCover, filename, onCoverChange]
   );
 
+  // Open editor with file
+  const openEditor = useCallback((file: File | Blob) => {
+    setEditorFile(file);
+    setShowEditor(true);
+  }, []);
+
   // Handle hapus cover (X button)
   const handleClear = useCallback(async () => {
     if (currentCover && currentCover.startsWith("/api/cover/")) {
@@ -113,13 +135,13 @@ export function CoverUploader({
           e.preventDefault();
           const file = items[i].getAsFile();
           if (file) {
-            uploadToR2(file, "clipboard");
+            openEditor(file);
           }
           return;
         }
       }
     },
-    [uploadToR2]
+    [openEditor]
   );
 
   // Handle file drop
@@ -128,15 +150,15 @@ export function CoverUploader({
       e.preventDefault();
       setDragOver(false);
       const file = e.dataTransfer.files?.[0];
-      if (file) uploadToR2(file, "drag & drop");
+      if (file) openEditor(file);
     },
-    [uploadToR2]
+    [openEditor]
   );
 
   // Handle file picker
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadToR2(file, "file picker");
+    if (file) openEditor(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -148,6 +170,21 @@ export function CoverUploader({
       setTimeout(() => {
         fileInputRef.current?.removeAttribute("capture");
       }, 1000);
+    }
+  };
+
+  // Re-edit existing cover
+  const handleEditExisting = async () => {
+    if (!currentCover) return;
+    // Download current cover to re-edit
+    try {
+      toast.loading("Memuat cover untuk diedit...", { id: "load-edit" });
+      const res = await fetch(currentCover);
+      const blob = await res.blob();
+      toast.dismiss("load-edit");
+      openEditor(blob);
+    } catch {
+      toast.error("Gagal memuat cover");
     }
   };
 
@@ -193,6 +230,25 @@ export function CoverUploader({
     );
   };
 
+  // Show editor modal
+  if (showEditor && editorFile) {
+    return (
+      <div className="space-y-3">
+        <label className="label">Edit Cover Buku</label>
+        <div className="card p-4">
+          <CoverEditor
+            imageFile={editorFile}
+            onSave={handleEditedFile}
+            onCancel={() => {
+              setShowEditor(false);
+              setEditorFile(null);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3" onPaste={handlePaste}>
       <label className="label">Cover Buku</label>
@@ -223,15 +279,25 @@ export function CoverUploader({
                 (e.target as HTMLImageElement).style.display = "none";
               }}
             />
-            {/* Clear button */}
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition"
-              title="Hapus cover"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            {/* Edit + Clear buttons */}
+            <div className="absolute top-2 right-2 flex gap-1">
+              <button
+                type="button"
+                onClick={handleEditExisting}
+                className="bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition"
+                title="Edit cover"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition"
+                title="Hapus cover"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-brand-400">
@@ -320,13 +386,24 @@ export function CoverUploader({
           <Upload className="w-3.5 h-3.5" />
           Pilih File
         </button>
+        {currentCover && (
+          <button
+            type="button"
+            onClick={handleEditExisting}
+            disabled={uploading}
+            className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            Edit
+          </button>
+        )}
         {uploading && (
           <span className="text-xs text-brand-500 self-center ml-auto flex items-center gap-1">
             <Loader2 className="w-3 h-3 animate-spin" />
             {stageMsg}
           </span>
         )}
-        {!uploading && (
+        {!uploading && !currentCover && (
           <span className="text-xs text-brand-400 self-center ml-auto">
             📋 Paste dari clipboard
           </span>

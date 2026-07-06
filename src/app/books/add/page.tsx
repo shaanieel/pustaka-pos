@@ -10,8 +10,9 @@ import { BookSearchCard } from "@/components/BookSearchCard";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
 import { CategoryPicker } from "@/components/CategoryPicker";
+import { BarcodeLabel } from "@/components/BarcodeLabel";
 import { getCategoryPrefix } from "@/lib/categories";
-import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus, Hash } from "lucide-react";
+import { ArrowLeft, Save, Search, Loader2, BookOpen, Trash2, Plus, Hash, Barcode } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatRupiah } from "@/lib/utils";
@@ -205,6 +206,12 @@ export default function AddBookPage() {
     }
     setSaving(true);
     try {
+      // Auto-generate book_code kalau kosong
+      let bookCode = form.book_code.trim() || null;
+      if (!bookCode) {
+        bookCode = await generateGenericBookCode();
+      }
+
       const { error } = await supabase.from("books").insert({
         title: form.title.trim(),
         author: form.author.trim(),
@@ -215,7 +222,7 @@ export default function AddBookPage() {
         publisher: form.publisher.trim() || null,
         cover_url: form.cover_url.trim() || null,
         year: form.year ? parseInt(form.year) : null,
-        book_code: form.book_code.trim() || null,
+        book_code: bookCode,
       });
       if (error) throw error;
       toast.success("Buku berhasil ditambahkan!");
@@ -264,6 +271,28 @@ export default function AddBookPage() {
     // Auto-generate book code pas kategori dipilih
     if (field === "category") {
       generateBookCode(value);
+    }
+  }
+
+  // ── AUTO-GENERATE GENERIC BOOK CODE (tanpa kategori) ──
+  async function generateGenericBookCode(): Promise<string> {
+    try {
+      const { data } = await supabase
+        .from("books")
+        .select("book_code")
+        .like("book_code", "BK%")
+        .order("book_code", { ascending: false })
+        .limit(1);
+
+      let maxNum = 0;
+      if (data && data.length > 0) {
+        const numStr = data[0].book_code.replace("BK", "");
+        maxNum = parseInt(numStr) || 0;
+      }
+      const nextNum = maxNum + 1;
+      return `BK${String(nextNum).padStart(4, "0")}`;
+    } catch {
+      return `BK0001`;
     }
   }
 
@@ -417,6 +446,17 @@ export default function AddBookPage() {
             </button>
           </div>
         </form>
+
+        {/* Barcode Label Section — muncul setelah buku ada book_code */}
+        {form.book_code && (
+          <div className="pt-4 border-t border-brand-100 space-y-3">
+            <h3 className="font-medium text-brand-700 text-sm flex items-center gap-1.5">
+              <Barcode className="w-4 h-4" />
+              Label Barcode — Print & Tempel di Buku
+            </h3>
+            <BarcodeLabel value={form.book_code} label={form.title} />
+          </div>
+        )}
       </div>
     </div>
   );

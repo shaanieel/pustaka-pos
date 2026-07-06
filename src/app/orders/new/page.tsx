@@ -101,27 +101,40 @@ export default function NewOrderPage() {
     return matchSearch && matchCategory;
   });
 
-  // ── SCAN BARCODE ──
-  const handleScannedISBN = useCallback(async (isbn: string) => {
-    toast.loading(`Mencari buku ISBN: ${isbn}...`, { id: "scan-kasir" });
+  // ── SCAN BARCODE ── (cari ISBN ATAU book_code)
+  const handleScannedISBN = useCallback(async (code: string) => {
+    toast.loading(`Mencari buku: ${code}...`, { id: "scan-kasir" });
     try {
-      const { data, error } = await supabase
+      // Coba cari by ISBN dulu
+      let { data, error } = await supabase
         .from("books")
         .select("*")
-        .eq("isbn", isbn)
-        .single();
+        .eq("isbn", code)
+        .maybeSingle();
+
+      // Kalau ga ketemu, coba by book_code
+      if (!data) {
+        const result = await supabase
+          .from("books")
+          .select("*")
+          .eq("book_code", code)
+          .maybeSingle();
+        data = result.data;
+        error = result.error as any;
+      }
 
       toast.dismiss("scan-kasir");
 
       if (error || !data) {
+        const isIsbn = /^\d{8,13}$/.test(code);
         toast(
           (t) => (
             <div className="flex flex-col gap-2">
-              <span className="text-sm">📚 ISBN {isbn} belum terdaftar</span>
+              <span className="text-sm">📚 {isIsbn ? `ISBN ${code}` : `Kode ${code}`} belum terdaftar</span>
               <button
                 onClick={() => {
                   toast.dismiss(t.id);
-                  router.push(`/books/add?isbn=${encodeURIComponent(isbn)}`);
+                  router.push(`/books/add?isbn=${encodeURIComponent(code)}`);
                 }}
                 className="btn-primary text-xs py-1.5 px-3 w-full flex items-center justify-center gap-1"
               >

@@ -6,14 +6,14 @@ export const runtime = "edge";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Save, Trash2, ScanLine, Download, Hash } from "lucide-react";
+import { ArrowLeft, Save, Trash2, ScanLine, Hash, Barcode } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { BarcodeLabel } from "@/components/BarcodeLabel";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ScannerButton } from "@/components/ScannerButton";
 import { CoverUploader } from "@/components/CoverUploader";
 import { CategoryPicker } from "@/components/CategoryPicker";
-import { QRCodeSVG } from "qrcode.react";
 import { deleteCoverFromR2 } from "@/lib/compress";
 import { getCategoryPrefix } from "@/lib/categories";
 
@@ -290,47 +290,21 @@ export default function EditBookPage() {
         </div>
       </form>
 
-      {/* QR Code Section */}
+      {/* Barcode Label Section (Code 128 — memanjang) */}
       <div className="card p-6 space-y-4">
         <div>
-          <h2 className="font-semibold text-brand-800">QR Code Buku</h2>
-          <p className="text-xs text-brand-400 mt-1">Scan untuk akses cepat buku ini</p>
+          <h2 className="font-semibold text-brand-800 flex items-center gap-2">
+            <Barcode className="w-4 h-4" />
+            Label Barcode Buku
+          </h2>
+          <p className="text-xs text-brand-400 mt-1">
+            Print & tempel di buku — scan di kasir untuk transaksi cepat
+          </p>
         </div>
-        <div className="flex flex-col items-center gap-4">
-          <div id="book-qr-code" className="bg-white p-4 rounded-xl border border-brand-200 inline-block">
-            <QRCodeSVG
-              value={form.book_code || bookId}
-              size={200}
-              level="M"
-              includeMargin
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              const svgEl = document.querySelector("#book-qr-code svg");
-              if (!svgEl) return;
-              const svgData = new XMLSerializer().serializeToString(svgEl);
-              const canvas = document.createElement("canvas");
-              const ctx = canvas.getContext("2d");
-              const img = new Image();
-              img.onload = () => {
-                canvas.width = 200;
-                canvas.height = 200;
-                ctx?.drawImage(img, 0, 0);
-                const link = document.createElement("a");
-                link.download = `${form.book_code || "buku"}-qrcode.png`;
-                link.href = canvas.toDataURL("image/png");
-                link.click();
-              };
-              img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
-            }}
-            className="btn-secondary text-sm flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Download PNG
-          </button>
-        </div>
+        <BarcodeLabel
+          value={form.book_code || bookId}
+          label={form.title}
+        />
       </div>
 
       <ConfirmModal
