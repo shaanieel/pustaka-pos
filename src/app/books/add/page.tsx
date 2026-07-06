@@ -103,6 +103,7 @@ export default function AddBookPage() {
           cover_url: r2CoverUrl,
           year: result.year?.toString() || "",
           book_code: "",
+          description: "",
         });
       } else {
         // ISBN TIDAK ketemu → ISBN tetap terisi, user isi manual
@@ -196,6 +197,7 @@ export default function AddBookPage() {
       cover_url: r2CoverUrl,
       year: result.year?.toString() || "",
       book_code: "",
+      description: "",
     });
 
     setTimeout(() => {
