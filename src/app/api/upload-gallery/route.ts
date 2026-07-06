@@ -4,13 +4,9 @@
 export const runtime = "edge";
 
 const SUPABASE_URL = "https://qzlsccxuokfzwdlqrohx.supabase.co";
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6bHNjY3h1b2tmendkbHFyb2h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjY2MjYwNywiZXhwIjoyMDk4MjM4NjA3fQ.YJpieTzfT9uhN1Dyd6JXOiqBSXlprIsJNieZmaFHK3g";
 
 export async function POST(req: Request) {
-  if (!SERVICE_KEY) {
-    return Response.json({ error: "SERVICE_KEY tidak dikonfigurasi" }, { status: 500 });
-  }
-
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
