@@ -5,7 +5,7 @@ export const runtime = "edge";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { StatsCard } from "@/components/StatsCard";
-import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package, PackageOpen, PlusCircle } from "lucide-react";
+import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package, PackageOpen, PlusCircle, ImageIcon } from "lucide-react";
 import { formatRupiah, formatDate } from "@/lib/utils";
 import { DashboardStats, Order, Book } from "@/types";
 import Link from "next/link";
@@ -89,7 +89,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <Link
           href="/orders/new"
           className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
@@ -98,7 +98,7 @@ export default function DashboardPage() {
             <ShoppingCart className="w-5 h-5 text-brand-600" />
           </div>
           <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
-            Pesanan Baru
+            Pesanan
           </span>
         </Link>
         <Link
@@ -109,7 +109,7 @@ export default function DashboardPage() {
             <PackageOpen className="w-5 h-5 text-amber-600" />
           </div>
           <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
-            Stok Masuk
+            Stok
           </span>
         </Link>
         <Link
@@ -120,7 +120,18 @@ export default function DashboardPage() {
             <PlusCircle className="w-5 h-5 text-green-600" />
           </div>
           <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
-            Tambah Buku
+            Buku
+          </span>
+        </Link>
+        <Link
+          href="/gallery"
+          className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center">
+            <ImageIcon className="w-5 h-5 text-purple-600" />
+          </div>
+          <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
+            Galeri
           </span>
         </Link>
       </div>
