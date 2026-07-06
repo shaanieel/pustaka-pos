@@ -125,15 +125,21 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
   const rotateCW = () => setRotation((r) => (r + 90) % 360);
   const rotateCCW = () => setRotation((r) => (r - 90 + 360) % 360);
 
+  // Get canvas-space coordinates from CSS-space coordinates (handles max-w-full scaling)
+  const cssToCanvas = (cssX: number, cssY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const scaleX = canvas.width / canvas.clientWidth;
+    const scaleY = canvas.height / canvas.clientHeight;
+    return { x: cssX * scaleX, y: cssY * scaleY };
+  };
+
   // Mouse & Touch handlers for crop
   const getPos = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    };
+    return cssToCanvas(clientX - rect.left, clientY - rect.top);
   };
 
   const startDrag = (clientX: number, clientY: number) => {
@@ -191,13 +197,20 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
     setRotation(0);
   };
 
-  // Handle save
+  // Handle save — synchronous blob extraction to avoid timing issues
   const handleSave = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.toBlob((blob) => {
-      if (blob) onSave(blob);
-    }, "image/png");
+    // Convert canvas to Blob synchronously via data URL
+    const dataUrl = canvas.toDataURL("image/png");
+    const byteString = atob(dataUrl.split(",")[1]);
+    const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    onSave(new Blob([ab], { type: mimeString }));
   };
 
   // Reset
