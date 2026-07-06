@@ -49,10 +49,13 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
     const img = image;
     if (!canvas || !img) return;
 
-    const rotated = rotation % 360;
-    const isVertical = rotated === 90 || rotated === 270;
-    const cw = isVertical ? img.naturalHeight : img.naturalWidth;
-    const ch = isVertical ? img.naturalWidth : img.naturalHeight;
+    const angle = (rotation * Math.PI) / 180;
+    const cos = Math.abs(Math.cos(angle));
+    const sin = Math.abs(Math.sin(angle));
+
+    // Canvas dimensions to fit the rotated image
+    const cw = img.naturalWidth * cos + img.naturalHeight * sin;
+    const ch = img.naturalWidth * sin + img.naturalHeight * cos;
 
     // Fit to container
     const containerW = containerRef.current?.clientWidth || 300;
@@ -69,8 +72,11 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
     // Apply rotation
     ctx.save();
     ctx.translate(dw / 2, dh / 2);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.rotate(angle);
+    // Draw image at its original aspect ratio (unrotated) in the rotated system
+    const sw = img.naturalWidth * scale;
+    const sh = img.naturalHeight * scale;
+    ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
     ctx.restore();
 
     // Apply brightness/contrast via filter
@@ -119,27 +125,27 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
   const rotateCW = () => setRotation((r) => (r + 90) % 360);
   const rotateCCW = () => setRotation((r) => (r - 90 + 360) % 360);
 
-  // Mouse handlers for crop
-  const getCanvasPos = (e: React.MouseEvent) => {
+  // Mouse & Touch handlers for crop
+  const getPos = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: clientX - rect.left,
+      y: clientY - rect.top,
     };
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const startDrag = (clientX: number, clientY: number) => {
     if (activeTool !== "crop") return;
-    const pos = getCanvasPos(e);
+    const pos = getPos(clientX, clientY);
     setCropStart(pos);
     setIsDragging(true);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const moveDrag = (clientX: number, clientY: number) => {
     if (!isDragging || !cropStart) return;
-    const pos = getCanvasPos(e);
+    const pos = getPos(clientX, clientY);
     const x = Math.min(cropStart.x, pos.x);
     const y = Math.min(cropStart.y, pos.y);
     const w = Math.abs(pos.x - cropStart.x);
@@ -147,9 +153,21 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
     setCropRect({ x, y, w, h });
   };
 
-  const handleMouseUp = () => {
+  const endDrag = () => {
     setIsDragging(false);
   };
+
+  const handleMouseDown = (e: React.MouseEvent) => startDrag(e.clientX, e.clientY);
+  const handleMouseMove = (e: React.MouseEvent) => moveDrag(e.clientX, e.clientY);
+  const handleMouseUp = () => endDrag();
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchEnd = () => endDrag();
 
   // Apply crop
   const applyCrop = () => {
@@ -318,7 +336,10 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          className={`max-w-full ${activeTool === "crop" ? "cursor-crosshair" : ""}`}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className={`max-w-full touch-none ${activeTool === "crop" ? "cursor-crosshair" : ""}`}
         />
       </div>
 
