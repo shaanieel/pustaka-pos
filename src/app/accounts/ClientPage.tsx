@@ -24,6 +24,8 @@ interface Profile {
   district_name: string | null;
   village_name: string | null;
   postal_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string | null;
 }
 
@@ -36,6 +38,12 @@ export default function AccountsPage() {
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editProvinceName, setEditProvinceName] = useState("");
+  const [editRegencyName, setEditRegencyName] = useState("");
+  const [editDistrictName, setEditDistrictName] = useState("");
+  const [editVillageName, setEditVillageName] = useState("");
+  const [editPostalCode, setEditPostalCode] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,6 +76,12 @@ export default function AccountsPage() {
     setEditFullName(p.full_name || "");
     setEditEmail(p.email || "");
     setEditPhone(p.phone || "");
+    setEditAddress(p.address || "");
+    setEditProvinceName(p.province_name || "");
+    setEditRegencyName(p.regency_name || "");
+    setEditDistrictName(p.district_name || "");
+    setEditVillageName(p.village_name || "");
+    setEditPostalCode(p.postal_code || "");
     setEditPassword("");
     setShowPassword(false);
   };
@@ -83,6 +97,12 @@ export default function AccountsPage() {
           full_name: editFullName.trim(),
           email: editEmail.trim(),
           phone: editPhone.trim(),
+          address: editAddress.trim() || null,
+          province_name: editProvinceName.trim() || null,
+          regency_name: editRegencyName.trim() || null,
+          district_name: editDistrictName.trim() || null,
+          village_name: editVillageName.trim() || null,
+          postal_code: editPostalCode.trim() || null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editProfile.id);
@@ -133,7 +153,7 @@ export default function AccountsPage() {
       ) : (
         <div className="grid gap-3">
           {profiles.map((p) => {
-            const fullAddress = [p.village_name, p.district_name, p.regency_name, p.province_name]
+            const fullAddress = [p.address, p.village_name, p.district_name, p.regency_name, p.province_name]
               .filter(Boolean).join(", ");
 
             return (
@@ -240,6 +260,60 @@ export default function AccountsPage() {
                   className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
+                />
+              </div>
+              {/* Alamat */}
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-1">Alamat</label>
+                <input
+                  className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  placeholder="Jalan, gang, nomor rumah"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-brand-700 mb-1">Provinsi</label>
+                  <input
+                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                    value={editProvinceName}
+                    onChange={(e) => setEditProvinceName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-brand-700 mb-1">Kota</label>
+                  <input
+                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                    value={editRegencyName}
+                    onChange={(e) => setEditRegencyName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-brand-700 mb-1">Kecamatan</label>
+                  <input
+                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                    value={editDistrictName}
+                    onChange={(e) => setEditDistrictName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-brand-700 mb-1">Kelurahan</label>
+                  <input
+                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                    value={editVillageName}
+                    onChange={(e) => setEditVillageName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-1">Kode Pos</label>
+                <input
+                  className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                  value={editPostalCode}
+                  onChange={(e) => setEditPostalCode(e.target.value)}
                 />
               </div>
               {/* Password */}
