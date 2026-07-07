@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "pages:build": "npx @cloudflare/next-on-pages",
+    "pages:build": "npx @cloudflare/next-on-pages && echo '{\"version\":1,\"include\":[\"/*\"],\"exclude\":[\"/_next/static/*\",\"/_next/image/*\"]}' > .vercel/output/static/_routes.json",
     "preview": "npx @cloudflare/next-on-pages preview"
   },
   "dependencies": {
