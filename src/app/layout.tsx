@@ -4,7 +4,6 @@ import { Toaster } from "react-hot-toast";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNav } from "@/components/MobileNav";
 
-export const runtime = "edge";
 
 export const metadata: Metadata = {
   title: "Bunayya Putra — Grosir Al-Qur'an & Buku Islam",
