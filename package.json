@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/write-routes.js && npx @cloudflare/next-on-pages && node scripts/write-routes.js",
-    "postbuild": "node scripts/write-routes.js",
+    "build": "npx @cloudflare/next-on-pages",
     "start": "next start",
     "lint": "next lint",
     "pages:build": "npx @cloudflare/next-on-pages",
