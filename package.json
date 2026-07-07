@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/write-routes.js && npx @cloudflare/next-on-pages && node scripts/write-routes.js",
+    "build": "next build && npx @cloudflare/next-on-pages",
+    "postbuild": "node -e \"require('fs').writeFileSync('.vercel/output/static/_routes.json', JSON.stringify({version:1,include:['/*'],exclude:['/_next/static/*','/_next/image/*']}))\"",
     "start": "next start",
     "lint": "next lint",
     "pages:build": "npx @cloudflare/next-on-pages",
