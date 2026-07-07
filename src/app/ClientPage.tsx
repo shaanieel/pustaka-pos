@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { StatsCard } from "@/components/StatsCard";
-import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package, PackageOpen, PlusCircle, ImageIcon } from "lucide-react";
+import { BookOpen, ShoppingCart, Users, DollarSign, TrendingUp, Package, PackageOpen, PlusCircle, ImageIcon, Shield } from "lucide-react";
 import { formatRupiah, formatDate } from "@/lib/utils";
 import { DashboardStats, Order, Book } from "@/types";
 import Link from "next/link";
@@ -88,17 +88,30 @@ export default function DashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3">
-        <Link
-          href="/orders/new"
-          className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
-        >
-          <div className="w-11 h-11 rounded-xl bg-brand-100 flex items-center justify-center">
-            <ShoppingCart className="w-5 h-5 text-brand-600" />
-          </div>
-          <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
-            Pesanan
-          </span>
-        </Link>
+        <div className="flex flex-col gap-3">
+          <Link
+            href="/orders/new"
+            className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
+          >
+            <div className="w-11 h-11 rounded-xl bg-brand-100 flex items-center justify-center">
+              <ShoppingCart className="w-5 h-5 text-brand-600" />
+            </div>
+            <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
+              Pesanan
+            </span>
+          </Link>
+          <Link
+            href="/accounts"
+            className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"
+          >
+            <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-slate-600" />
+            </div>
+            <span className="text-xs font-semibold text-brand-700 text-center leading-tight">
+              Data Akun
+            </span>
+          </Link>
+        </div>
         <Link
           href="/stock/in"
           className="card p-4 flex flex-col items-center justify-center gap-2 hover:bg-brand-50/60 transition-colors active:scale-[0.97]"

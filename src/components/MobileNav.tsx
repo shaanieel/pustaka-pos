@@ -9,6 +9,7 @@ import {
   Users,
   Plus,
   Clock,
+  Shield,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -16,7 +17,8 @@ const navItems = [
   { href: "/", label: "Beranda", icon: LayoutDashboard },
   { href: "/books", label: "Buku", icon: BookOpen },
   // Center: floating add button (not in the map, rendered separately)
-  { href: "/orders", label: "Riwayat", icon: Clock },
+  { href: "/orders", label: "Pesanan", icon: Clock },
+  { href: "/accounts", label: "Data Akun", icon: Shield },
   { href: "/customers", label: "Pelanggan", icon: Users },
 ];
 
