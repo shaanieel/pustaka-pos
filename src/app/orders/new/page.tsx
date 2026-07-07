@@ -94,50 +94,45 @@ export default function NewOrderPage() {
   }, []);
 
   // Filtered books
-  const displayedBooks = allBooks.filter((b) => {
-    const matchSearch =
-      !bookSearch.trim() ||
-      b.title.toLowerCase().includes(bookSearch.toLowerCase()) ||
-      (b.author && b.author.toLowerCase().includes(bookSearch.toLowerCase())) ||
-      (b.isbn && b.isbn.includes(bookSearch));
-    const matchCategory =
-      genreFilterIds.length === 0 ||
-      (b.category &&
-        b.category.split(", ").some((cat) =>
-          genreSelectionsData.some(
-            (s: { subgenre_name: string }) =>
-              cat.toLowerCase() === s.subgenre_name.toLowerCase()
-          )
-        ));
-    return matchSearch && matchCategory;
-  });
+  const displayedBooks = (() => {
+    try {
+      return allBooks.filter((b) => {
+        const matchSearch =
+          !bookSearch.trim() ||
+          b.title?.toLowerCase().includes(bookSearch.toLowerCase()) ||
+          (b.author && b.author.toLowerCase().includes(bookSearch.toLowerCase())) ||
+          (b.isbn && b.isbn.includes(bookSearch));
+        const matchCategory =
+          genreFilterIds.length === 0 ||
+          (b.category &&
+            b.category.split(", ").some((cat) =>
+              genreSelectionsData.some(
+                (s: { subgenre_name: string }) =>
+                  cat.toLowerCase() === s.subgenre_name?.toLowerCase()
+              )
+            ));
+        return matchSearch && matchCategory;
+      });
+    } catch {
+      return allBooks;
+    }
+  })();
 
   // Helper: store genre selections for filtering
   const [genreSelectionsData, setGenreSelectionsData] = useState<
     { subgenre_id: number; genre_name: string; subgenre_name: string }[]
   >([]);
 
-  // ── SCAN BARCODE ── (cari ISBN ATAU book_code)
+  // ── SCAN BARCODE ── (cari ISBN ATAU book_code — 2 kolom)
   const handleScannedISBN = useCallback(async (code: string) => {
-    toast.loading(`Mencari buku: ${code}...`, { id: "scan-kasir" });
+    toast.loading(`Mencari kode: ${code}...`, { id: "scan-kasir" });
     try {
-      // Coba cari by ISBN dulu
-      let { data, error } = await supabase
+      // Cek di 2 kolom: isbn + book_code (pakai OR query)
+      const { data, error } = await supabase
         .from("books")
         .select("*")
-        .eq("isbn", code)
+        .or(`isbn.eq.${code},book_code.eq.${code}`)
         .maybeSingle();
-
-      // Kalau ga ketemu, coba by book_code
-      if (!data) {
-        const result = await supabase
-          .from("books")
-          .select("*")
-          .eq("book_code", code)
-          .maybeSingle();
-        data = result.data;
-        error = result.error as any;
-      }
 
       toast.dismiss("scan-kasir");
 
@@ -264,6 +259,19 @@ export default function NewOrderPage() {
         }
         if (newQty <= 0) return c;
         return { ...c, quantity: newQty };
+      })
+    );
+  }
+
+  function updateQtyDirect(bookId: string, qty: number) {
+    setCart(
+      cart.map((c) => {
+        if (c.book.id !== bookId) return c;
+        if (qty > c.book.stock) {
+          toast.error(`Stok hanya ${c.book.stock}`);
+          return { ...c, quantity: c.book.stock };
+        }
+        return { ...c, quantity: qty };
       })
     );
   }
@@ -785,7 +793,18 @@ export default function NewOrderPage() {
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="w-6 text-center text-xs font-bold text-brand-950">{c.quantity}</span>
+                      <input
+                        type="number"
+                        value={c.quantity}
+                        min={1}
+                        max={c.book.stock}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          const clamped = Math.min(Math.max(val, 1), c.book.stock);
+                          updateQtyDirect(c.book.id, clamped);
+                        }}
+                        className="w-10 text-center text-xs font-bold text-brand-950 border border-brand-200 rounded-md py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                       <button
                         onClick={() => updateQty(c.book.id, 1)}
                         className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
@@ -1041,7 +1060,18 @@ export default function NewOrderPage() {
                 >
                   <Minus className="w-3 h-3" />
                 </button>
-                <span className="w-5 text-center text-xs font-bold text-brand-950">{c.quantity}</span>
+                <input
+                  type="number"
+                  value={c.quantity}
+                  min={1}
+                  max={c.book.stock}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    const clamped = Math.min(Math.max(val, 1), c.book.stock);
+                    updateQtyDirect(c.book.id, clamped);
+                  }}
+                  className="w-10 text-center text-xs font-bold text-brand-950 border border-brand-200 rounded-md py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
                 <button
                   onClick={() => updateQty(c.book.id, 1)}
                   className="p-1 rounded-lg hover:bg-brand-100 text-brand-600"
