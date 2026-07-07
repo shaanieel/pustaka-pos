@@ -10,9 +10,9 @@ import { Receipt } from "@/components/Receipt";
 import { formatRupiah, formatDate } from "@/lib/utils";
 import {
   Plus, ReceiptText, CircleCheck, Clock, XCircle, Eye,
-  ChevronDown, Filter, Banknote, TrendingUp, ShoppingCart,
+  ChevronDown, TrendingUp, ShoppingCart,
   CheckCircle2, AlertTriangle, Pencil, Trash2, Calendar,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Filter
 } from "lucide-react";
 import Link from "next/link";
 import { clsx } from "clsx";
@@ -27,13 +27,39 @@ export default function OrdersPage() {
   const now = new Date();
   const [preset, setPreset] = useState<"none" | "today" | "yesterday" | "month" | "range">("month");
   const [startDate, setStartDate] = useState(() => {
-    // Default: last 30 days (e.g. 7 Apr - 7 Mei)
     const d = new Date(now);
     d.setDate(d.getDate() - 30);
     return d.toISOString().split("T")[0];
   });
   const [endDate, setEndDate] = useState(() => now.toISOString().split("T")[0]);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(() => String(now.getMonth() + 1).padStart(2, "0"));
+  const [filterYear, setFilterYear] = useState(() => String(now.getFullYear()));
+
+  function onMonthChange(month: string) {
+    setFilterMonth(month);
+    const y = filterYear || String(now.getFullYear());
+    const lastDay = new Date(parseInt(y), parseInt(month), 0).getDate();
+    setStartDate(`${y}-${month}-01`);
+    setEndDate(`${y}-${month}-${String(lastDay).padStart(2, "0")}`);
+    setPreset("range");
+  }
+
+  function onYearChange(year: string) {
+    setFilterYear(year);
+    const m = filterMonth || String(now.getMonth() + 1).padStart(2, "0");
+    const lastDay = new Date(parseInt(year), parseInt(m), 0).getDate();
+    setStartDate(`${year}-${m}-01`);
+    setEndDate(`${year}-${m}-${String(lastDay).padStart(2, "0")}`);
+    setPreset("range");
+  }
+
+  const MONTHS = [
+    { value: "01", label: "Januari" }, { value: "02", label: "Februari" }, { value: "03", label: "Maret" },
+    { value: "04", label: "April" }, { value: "05", label: "Mei" }, { value: "06", label: "Juni" },
+    { value: "07", label: "Juli" }, { value: "08", label: "Agustus" }, { value: "09", label: "September" },
+    { value: "10", label: "Oktober" }, { value: "11", label: "November" }, { value: "12", label: "Desember" },
+  ];
 
   // Receipt viewer
   const [viewingOrder, setViewingOrder] = useState<OrderWithItems | null>(null);
@@ -75,7 +101,7 @@ export default function OrdersPage() {
     setLoading(true);
     try {
       const end = new Date(endDate);
-      end.setDate(end.getDate() + 1); // include end date
+      end.setDate(end.getDate() + 1);
 
       let query = supabase
         .from("orders")
@@ -303,6 +329,34 @@ export default function OrdersPage() {
           )}
         </div>
 
+        {/* ═══ MONTH & YEAR FILTER ═══ */}
+        <div className="flex gap-2">
+          <div className="relative">
+            <select
+              value={filterMonth}
+              onChange={(e) => onMonthChange(e.target.value)}
+              className="appearance-none bg-white border border-brand-200 rounded-xl px-3 py-2.5 pr-8 text-sm font-medium text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-300 cursor-pointer"
+            >
+              {MONTHS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 pointer-events-none" />
+          </div>
+          <div className="relative">
+            <select
+              value={filterYear}
+              onChange={(e) => onYearChange(e.target.value)}
+              className="appearance-none bg-white border border-brand-200 rounded-xl px-3 py-2.5 pr-8 text-sm font-medium text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-300 cursor-pointer"
+            >
+              {Array.from({ length: 15 }, (_, i) => now.getFullYear() - i).map((y) => (
+                <option key={y} value={String(y)}>{y}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 pointer-events-none" />
+          </div>
+        </div>
+
         {/* ═══ SEARCH ═══ */}
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
           <div className="flex-1">
@@ -365,37 +419,37 @@ export default function OrdersPage() {
                     </div>
                   </div>
 
-                  {/* Row 2: Status badge + actions */}
+                  {/* Row 2: Status badge + actions - scrollable on mobile */}
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-brand-100">
                     <PayBadge status={ps} />
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none ml-2 shrink-0">
                       <button
                         onClick={() => deleteOrder(order.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 text-xs font-bold transition-colors"
+                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 text-xs font-bold transition-colors"
                       >
                         <Trash2 className="w-3 h-3" />
-                        Hapus
+                        <span className="hidden sm:inline">Hapus</span>
                       </button>
                       <Link href={`/orders/${order.id}/edit`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-bold transition-colors"
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-bold transition-colors"
                       >
                         <Pencil className="w-3.5 h-3.5" />
-                        Edit
+                        <span className="hidden sm:inline">Edit</span>
                       </Link>
                       {showMarkLunas && (
                         <button onClick={() => markAsLunas(order.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs font-bold transition-colors"
+                          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs font-bold transition-colors"
                         >
                           <CircleCheck className="w-4 h-4" />
-                          Lunas
+                          <span className="hidden sm:inline">Lunas</span>
                         </button>
                       )}
                       {order.status === "completed" && (
                         <button onClick={() => viewReceipt(order)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-bold transition-colors"
+                          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-bold transition-colors"
                         >
                           <Eye className="w-4 h-4" />
-                          Struk
+                          <span className="hidden sm:inline">Struk</span>
                         </button>
                       )}
                     </div>
