@@ -12,6 +12,12 @@ export const metadata: Metadata = {
     shortcut: "https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/favicon-32.png",
     apple: "https://qzlsccxuokfzwdlqrohx.supabase.co/storage/v1/object/public/assets/favicon-32.png",
   },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Bunayya Putra",
+  },
 };
 
 export const viewport: Viewport = {
@@ -30,9 +36,58 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className="min-h-screen flex flex-col lg:flex-row">
+      <head>
+        {/* iOS fullscreen hints */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-touch-fullscreen" content="yes" />
+        <style>{`
+          /* Prevent pull-to-refresh and overscroll on mobile */
+          html, body {
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: touch;
+          }
+          body {
+            /* Prevent select text on mobile for app-like feel */
+            -webkit-tap-highlight-color: transparent;
+            /* Use safe area insets for notched phones */
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+          }
+        `}</style>
+      </head>
+      <body className="min-h-[100dvh] flex flex-col lg:flex-row">
+        {/* Auto fullscreen trigger — one tap anywhere */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              document.addEventListener('DOMContentLoaded', function() {
+                // Auto-fullscreen attempt (works in some browsers after user gesture)
+                document.addEventListener('click', function() {
+                  if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                  }
+                }, { once: true });
+
+                // Lock orientation to portrait on mobile
+                try {
+                  if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('portrait').catch(() => {});
+                  }
+                } catch(e) {}
+
+                // Expand viewport to hide address bar on scroll
+                let _lastScrollTop = 0;
+                window.addEventListener('scroll', function() {
+                  const st = window.pageYOffset || document.documentElement.scrollTop;
+                  _lastScrollTop = st <= 0 ? 0 : st;
+                }, { passive: true });
+              });
+            `,
+          }}
+        />
         <Sidebar />
-        <main className="flex-1 pb-24 lg:pb-8 lg:ml-64 min-h-screen">
+        <main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-8 lg:ml-64 min-h-[100dvh]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
             {children}
           </div>
