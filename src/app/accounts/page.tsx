@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { SearchBar } from "@/components/SearchBar";
 import { Users, Mail, Phone, MapPin, Shield, Eye, EyeOff, Save, X } from "lucide-react";
 import toast from "react-hot-toast";
+
+// Service role client untuk admin — baca/tulis semua profiles
+const adminSupabase = createClient(
+  "https://qzlsccxuokfzwdlqrohx.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6bHNjY3h1b2tmendkbHFyb2h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjY2MjYwNywiZXhwIjoyMDk4MjM4NjA3fQ.YJpieTzfT9uhN1Dyd6JXOiqBSXlprIsJNieZmaFHK3g",
+  { auth: { persistSession: false } }
+);
 
 interface Profile {
   id: string;
@@ -35,10 +43,17 @@ export default function AccountsPage() {
   const loadProfiles = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/accounts?search=${encodeURIComponent(search)}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
-      setProfiles(json.profiles || []);
+      let query = adminSupabase.from("profiles").select("*");
+
+      if (search) {
+        query = query.or(
+          `full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
+        );
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
+      if (error) throw error;
+      setProfiles(data || []);
     } catch {
       toast.error("Gagal memuat data akun.");
     } finally {
@@ -62,20 +77,17 @@ export default function AccountsPage() {
     if (!editFullName.trim()) return toast.error("Nama wajib diisi.");
     setSaving(true);
     try {
-      const res = await fetch("/api/accounts", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editProfile.id,
+      const { error } = await adminSupabase
+        .from("profiles")
+        .update({
           full_name: editFullName.trim(),
           email: editEmail.trim(),
           phone: editPhone.trim(),
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.error || "Gagal update");
-      }
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editProfile.id);
+
+      if (error) throw error;
       toast.success("Data akun berhasil disimpan.");
       setEditProfile(null);
       loadProfiles();
