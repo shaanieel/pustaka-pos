@@ -3,5 +3,12 @@
   "include": [
     "/*"
   ],
-  "exclude": []
+  "exclude": [
+    "/_next/static/*",
+    "/_next/image/*",
+    "/logo*.png",
+    "/manifest.json",
+    "/404.html",
+    "/500.html"
+  ]
 }
