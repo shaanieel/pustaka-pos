@@ -93,22 +93,26 @@ export default function NewOrderPage() {
     })();
   }, []);
 
-  // Filtered books
+  // Helper: store genre selections for filtering
+  const [genreSelectionsData, setGenreSelectionsData] = useState<
+    { subgenre_id: number; genre_name: string; subgenre_name: string }[]
+  >([]);
+
+  // Filtered books — safe with try/catch
   const displayedBooks = (() => {
     try {
       return allBooks.filter((b) => {
         const matchSearch =
           !bookSearch.trim() ||
-          b.title?.toLowerCase().includes(bookSearch.toLowerCase()) ||
-          (b.author && b.author.toLowerCase().includes(bookSearch.toLowerCase())) ||
-          (b.isbn && b.isbn.includes(bookSearch));
+          (b.title ?? "").toLowerCase().includes(bookSearch.toLowerCase()) ||
+          ((b.author ?? "").toLowerCase().includes(bookSearch.toLowerCase())) ||
+          ((b.isbn ?? "").includes(bookSearch));
         const matchCategory =
           genreFilterIds.length === 0 ||
-          (b.category &&
-            b.category.split(", ").some((cat) =>
+          ((b.category ?? "") &&
+            (b.category ?? "").split(", ").some((cat) =>
               genreSelectionsData.some(
-                (s: { subgenre_name: string }) =>
-                  cat.toLowerCase() === s.subgenre_name?.toLowerCase()
+                (s) => cat.toLowerCase() === (s.subgenre_name ?? "").toLowerCase()
               )
             ));
         return matchSearch && matchCategory;
@@ -117,11 +121,6 @@ export default function NewOrderPage() {
       return allBooks;
     }
   })();
-
-  // Helper: store genre selections for filtering
-  const [genreSelectionsData, setGenreSelectionsData] = useState<
-    { subgenre_id: number; genre_name: string; subgenre_name: string }[]
-  >([]);
 
   // ── SCAN BARCODE ── (cari ISBN ATAU book_code — 2 kolom)
   const handleScannedISBN = useCallback(async (code: string) => {
