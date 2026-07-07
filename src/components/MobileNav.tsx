@@ -21,7 +21,7 @@ const navItems = [
 ];
 
 export function MobileNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const router = useRouter();
 
   function isActive(href: string) {
