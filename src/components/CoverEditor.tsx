@@ -198,14 +198,14 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
     canvas.height = cropRect.h;
     ctx.drawImage(tempCanvas, 0, 0);
 
-    setCropRect(null);
-    setActiveTool("none");
-
-    // Wait for image load before setting state (prevents naturalWidth=0 glitch)
+    // Update image + reset tools ATOMICALLY in onload —
+    // prevents drawCanvas from firing with stale image after crop
     const newImg = new Image();
     newImg.onload = () => {
       setImage(newImg);
       setRotation(0);
+      setCropRect(null);
+      setActiveTool("none");
     };
     newImg.src = canvas.toDataURL();
   };
