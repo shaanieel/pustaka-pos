@@ -32,12 +32,20 @@ export function CoverEditor({ imageFile, onSave, onCancel }: CoverEditorProps) {
 
   // Load image
   useEffect(() => {
+    // Reset state immediately — prevents stale image from showing
+    // when imageFile changes (e.g. user picks a new file)
+    setLoading(true);
+    setImage(null);
+    setCropRect(null);
+    setRotation(0);
+    setBrightness(100);
+    setContrast(100);
+    setActiveTool("none");
+
     const img = new Image();
     img.onload = () => {
       setImage(img);
       setLoading(false);
-      // Reset crop when image changes
-      setCropRect(null);
     };
     img.src = URL.createObjectURL(imageFile);
     return () => URL.revokeObjectURL(img.src);
