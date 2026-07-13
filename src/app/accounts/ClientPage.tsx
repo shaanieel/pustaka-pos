@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { SearchBar } from "@/components/SearchBar";
-import { Users, Mail, Phone, MapPin, Shield, Eye, EyeOff, Save, X } from "lucide-react";
+import { Users, Mail, Phone, MapPin, Shield, Eye, EyeOff, Save, X, Plus, Pencil, Trash2, Star } from "lucide-react";
 import toast from "react-hot-toast";
 
-// Service role client untuk admin — baca/tulis semua profiles
+// Service role client untuk admin — baca/tulis semua profiles + addresses
 const adminSupabase = createClient(
   "https://qzlsccxuokfzwdlqrohx.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6bHNjY3h1b2tmendkbHFyb2h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjY2MjYwNywiZXhwIjoyMDk4MjM4NjA3fQ.YJpieTzfT9uhN1Dyd6JXOiqBSXlprIsJNieZmaFHK3g",
@@ -29,11 +29,28 @@ interface Profile {
   created_at: string | null;
 }
 
+interface Address {
+  id: string;
+  label: string;
+  recipient_name: string;
+  recipient_phone: string;
+  address_line: string;
+  province_name: string | null;
+  regency_name: string | null;
+  district_name: string | null;
+  village_name: string | null;
+  postal_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_default: boolean;
+}
+
 export default function AccountsPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  // Profile edit state
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -47,6 +64,23 @@ export default function AccountsPage() {
   const [editPassword, setEditPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Address state
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+
+  // Address form
+  const [editAddressId, setEditAddressId] = useState<string | null>(null);
+  const [addrLabel, setAddrLabel] = useState("Rumah");
+  const [addrRecipient, setAddrRecipient] = useState("");
+  const [addrPhone, setAddrPhone] = useState("");
+  const [addrLine, setAddrLine] = useState("");
+  const [addrProvince, setAddrProvince] = useState("");
+  const [addrRegency, setAddrRegency] = useState("");
+  const [addrDistrict, setAddrDistrict] = useState("");
+  const [addrVillage, setAddrVillage] = useState("");
+  const [addrPostal, setAddrPostal] = useState("");
+  const [savingAddr, setSavingAddr] = useState(false);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
@@ -71,6 +105,23 @@ export default function AccountsPage() {
 
   useEffect(() => { loadProfiles(); }, [loadProfiles]);
 
+  // Load addresses for edited user
+  const loadAddresses = async (userId: string) => {
+    setAddressesLoading(true);
+    try {
+      const { data } = await adminSupabase
+        .from("addresses")
+        .select("*")
+        .eq("user_id", userId)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: true });
+      setAddresses(data || []);
+    } catch {
+      setAddresses([]);
+    }
+    setAddressesLoading(false);
+  };
+
   const openEdit = (p: Profile) => {
     setEditProfile(p);
     setEditFullName(p.full_name || "");
@@ -84,6 +135,97 @@ export default function AccountsPage() {
     setEditPostalCode(p.postal_code || "");
     setEditPassword("");
     setShowPassword(false);
+    setEditAddressId(null);
+    resetAddrForm();
+    loadAddresses(p.id);
+  };
+
+  const resetAddrForm = () => {
+    setEditAddressId(null);
+    setAddrLabel("Rumah");
+    setAddrRecipient("");
+    setAddrPhone("");
+    setAddrLine("");
+    setAddrProvince("");
+    setAddrRegency("");
+    setAddrDistrict("");
+    setAddrVillage("");
+    setAddrPostal("");
+  };
+
+  const openAddrForm = (addr?: Address) => {
+    if (addr) {
+      setEditAddressId(addr.id);
+      setAddrLabel(addr.label);
+      setAddrRecipient(addr.recipient_name);
+      setAddrPhone(addr.recipient_phone);
+      setAddrLine(addr.address_line);
+      setAddrProvince(addr.province_name || "");
+      setAddrRegency(addr.regency_name || "");
+      setAddrDistrict(addr.district_name || "");
+      setAddrVillage(addr.village_name || "");
+      setAddrPostal(addr.postal_code || "");
+    } else {
+      resetAddrForm();
+    }
+  };
+
+  const saveAddr = async () => {
+    if (!editProfile) return;
+    if (!addrRecipient.trim() || !addrPhone.trim() || !addrLine.trim()) {
+      return toast.error("Nama, HP, dan alamat wajib diisi.");
+    }
+    setSavingAddr(true);
+    const payload = {
+      user_id: editProfile.id,
+      label: addrLabel,
+      recipient_name: addrRecipient.trim(),
+      recipient_phone: addrPhone.trim(),
+      address_line: addrLine.trim(),
+      province_name: addrProvince.trim() || null,
+      regency_name: addrRegency.trim() || null,
+      district_name: addrDistrict.trim() || null,
+      village_name: addrVillage.trim() || null,
+      postal_code: addrPostal.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    let error;
+    if (editAddressId) {
+      ({ error } = await adminSupabase.from("addresses").update(payload).eq("id", editAddressId));
+    } else {
+      ({ error } = await adminSupabase.from("addresses").insert(payload));
+    }
+    setSavingAddr(false);
+    if (error) {
+      toast.error("Gagal simpan alamat: " + error.message);
+      return;
+    }
+    toast.success(editAddressId ? "Alamat diperbarui." : "Alamat ditambahkan.");
+    resetAddrForm();
+    loadAddresses(editProfile.id);
+  };
+
+  const deleteAddress = async (id: string) => {
+    if (!confirm("Hapus alamat ini?")) return;
+    const { error } = await adminSupabase.from("addresses").delete().eq("id", id);
+    if (error) {
+      toast.error("Gagal hapus: " + error.message);
+      return;
+    }
+    toast.success("Alamat dihapus.");
+    if (editProfile) loadAddresses(editProfile.id);
+  };
+
+  const setDefaultAddress = async (id: string, userId: string) => {
+    await adminSupabase.from("addresses").update({ is_default: false }).eq("user_id", userId);
+    const { error } = await adminSupabase.from("addresses").update({ is_default: true }).eq("id", id);
+    if (error) {
+      toast.error("Gagal: " + error.message);
+      return;
+    }
+    toast.success("Alamat utama diperbarui.");
+    loadAddresses(userId);
   };
 
   const saveEdit = async () => {
@@ -125,7 +267,7 @@ export default function AccountsPage() {
         <div>
           <h1 className="page-title">Data Akun</h1>
           <p className="page-subtitle">
-            {profiles.length} akun terdaftar — kelola email, nomor HP
+            {profiles.length} akun terdaftar — kelola data & alamat
           </p>
         </div>
       </div>
@@ -223,7 +365,7 @@ export default function AccountsPage() {
       {/* EDIT MODAL */}
       {editProfile && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b shrink-0">
               <h3 className="font-semibold text-brand-800">Edit Data Akun</h3>
               <button onClick={() => setEditProfile(null)} className="p-1 hover:bg-brand-50 rounded-full">
@@ -232,7 +374,10 @@ export default function AccountsPage() {
             </div>
 
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
-              {/* Nama */}
+              {/* ===== DATA DIRI ===== */}
+              <h4 className="text-sm font-bold text-brand-700 flex items-center gap-1.5">
+                <Shield className="w-4 h-4" /> Data Diri
+              </h4>
               <div>
                 <label className="block text-sm font-medium text-brand-700 mb-1">Nama Lengkap</label>
                 <input
@@ -241,7 +386,6 @@ export default function AccountsPage() {
                   onChange={(e) => setEditFullName(e.target.value)}
                 />
               </div>
-              {/* Email */}
               <div>
                 <label className="block text-sm font-medium text-brand-700 mb-1">Email</label>
                 <input
@@ -252,7 +396,6 @@ export default function AccountsPage() {
                 />
                 <p className="text-[10px] text-brand-400 mt-1">⚠️ Ubah email login user harus via Dashboard</p>
               </div>
-              {/* Phone */}
               <div>
                 <label className="block text-sm font-medium text-brand-700 mb-1">Nomor HP</label>
                 <input
@@ -262,7 +405,11 @@ export default function AccountsPage() {
                   onChange={(e) => setEditPhone(e.target.value)}
                 />
               </div>
-              {/* Alamat */}
+
+              {/* ===== ALAMAT PROFILE ===== */}
+              <h4 className="text-sm font-bold text-brand-700 flex items-center gap-1.5 pt-2 border-t border-brand-100">
+                <MapPin className="w-4 h-4" /> Alamat Profile (utama)
+              </h4>
               <div>
                 <label className="block text-sm font-medium text-brand-700 mb-1">Alamat</label>
                 <input
@@ -275,50 +422,226 @@ export default function AccountsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-brand-700 mb-1">Provinsi</label>
-                  <input
-                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    value={editProvinceName}
-                    onChange={(e) => setEditProvinceName(e.target.value)}
-                  />
+                  <input className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm" value={editProvinceName} onChange={(e) => setEditProvinceName(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-brand-700 mb-1">Kota</label>
-                  <input
-                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    value={editRegencyName}
-                    onChange={(e) => setEditRegencyName(e.target.value)}
-                  />
+                  <input className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm" value={editRegencyName} onChange={(e) => setEditRegencyName(e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-brand-700 mb-1">Kecamatan</label>
-                  <input
-                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    value={editDistrictName}
-                    onChange={(e) => setEditDistrictName(e.target.value)}
-                  />
+                  <input className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm" value={editDistrictName} onChange={(e) => setEditDistrictName(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-brand-700 mb-1">Kelurahan</label>
-                  <input
-                    className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                    value={editVillageName}
-                    onChange={(e) => setEditVillageName(e.target.value)}
-                  />
+                  <input className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm" value={editVillageName} onChange={(e) => setEditVillageName(e.target.value)} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-brand-700 mb-1">Kode Pos</label>
-                <input
-                  className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-                  value={editPostalCode}
-                  onChange={(e) => setEditPostalCode(e.target.value)}
-                />
+                <input className="w-full px-3 py-2 rounded-xl border border-brand-200 text-sm" value={editPostalCode} onChange={(e) => setEditPostalCode(e.target.value)} />
               </div>
+
+              {/* ===== ALAMAT TERSIMPAN (addresses) ===== */}
+              <div className="pt-2 border-t border-brand-100">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-brand-700 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4" /> Alamat Tersimpan ({addresses.length})
+                  </h4>
+                  {!editAddressId && (
+                    <button
+                      onClick={() => openAddrForm()}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-800"
+                    >
+                      <Plus className="w-3 h-3" /> Tambah
+                    </button>
+                  )}
+                </div>
+
+                {addressesLoading && (
+                  <p className="text-xs text-brand-400">Memuat alamat...</p>
+                )}
+
+                {!addressesLoading && editAddressId === null && addresses.length === 0 && (
+                  <p className="text-xs text-brand-300 italic py-2">Belum ada alamat tersimpan.</p>
+                )}
+
+                {/* Address list */}
+                {!addressesLoading && editAddressId === null && addresses.map((a) => (
+                  <div key={a.id} className="bg-brand-50 rounded-xl p-3 mb-2 text-sm">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-brand-700 text-xs">{a.label}</span>
+                          {a.is_default && (
+                            <span className="text-[10px] bg-gold/20 text-gold-foreground px-1.5 py-0 rounded-full">Utama</span>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium text-brand-800 mt-0.5">{a.recipient_name} — {a.recipient_phone}</p>
+                        <p className="text-xs text-brand-500 mt-0.5 line-clamp-2">
+                          {a.address_line}
+                          {[a.village_name, a.district_name, a.regency_name, a.province_name].filter(Boolean).join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button onClick={() => openAddrForm(a)} className="text-xs text-brand-500 hover:text-brand-700 flex items-center gap-0.5">
+                        <Pencil className="w-3 h-3" /> Edit
+                      </button>
+                      {!a.is_default && (
+                        <button onClick={() => setDefaultAddress(a.id, editProfile.id)} className="text-xs text-brand-500 hover:text-brand-700 flex items-center gap-0.5">
+                          <Star className="w-3 h-3" /> Utamakan
+                        </button>
+                      )}
+                      <button onClick={() => deleteAddress(a.id)} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-0.5 ml-auto">
+                        <Trash2 className="w-3 h-3" /> Hapus
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Address add/edit form */}
+                {editAddressId !== null || (editAddressId === null && addresses.length > 0 && editAddressId === null ? false : editAddressId === null && false) || editAddressId !== null ? (
+                  <div className="bg-brand-50 rounded-xl p-3 space-y-2 mt-2 border border-brand-200">
+                    <p className="text-xs font-semibold text-brand-700">
+                      {editAddressId ? "Edit Alamat" : "Tambah Alamat"}
+                    </p>
+                    <div className="flex gap-2">
+                      {["Rumah", "Kantor", "Gudang", "Lainnya"].map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          className={`text-xs px-2.5 py-1 rounded-full border ${
+                            addrLabel === l
+                              ? "bg-brand-200 border-brand-400 text-brand-800 font-semibold"
+                              : "bg-white border-brand-200 text-brand-500 hover:border-brand-400"
+                          }`}
+                          onClick={() => setAddrLabel(l)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      placeholder="Nama penerima"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrRecipient}
+                      onChange={(e) => setAddrRecipient(e.target.value)}
+                    />
+                    <input
+                      placeholder="No HP"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrPhone}
+                      onChange={(e) => setAddrPhone(e.target.value)}
+                    />
+                    <input
+                      placeholder="Alamat lengkap"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrLine}
+                      onChange={(e) => setAddrLine(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input placeholder="Provinsi" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrProvince} onChange={(e) => setAddrProvince(e.target.value)} />
+                      <input placeholder="Kota/Kab" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrRegency} onChange={(e) => setAddrRegency(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input placeholder="Kecamatan" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrDistrict} onChange={(e) => setAddrDistrict(e.target.value)} />
+                      <input placeholder="Kelurahan" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrVillage} onChange={(e) => setAddrVillage(e.target.value)} />
+                    </div>
+                    <input
+                      placeholder="Kode Pos"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrPostal}
+                      onChange={(e) => setAddrPostal(e.target.value)}
+                    />
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={resetAddrForm}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-brand-200 text-xs text-brand-600 hover:bg-white"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        onClick={saveAddr}
+                        disabled={savingAddr}
+                        className="flex-1 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-50"
+                      >
+                        {savingAddr ? "..." : "Simpan"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Show add form when no addresses exist AND no form is open */}
+                {!addressesLoading && addresses.length === 0 && editAddressId === null && (
+                  <div className="bg-brand-50 rounded-xl p-3 space-y-2 mt-2 border border-brand-200">
+                    <p className="text-xs font-semibold text-brand-700">Tambah Alamat</p>
+                    <div className="flex gap-2">
+                      {["Rumah", "Kantor", "Gudang", "Lainnya"].map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          className={`text-xs px-2.5 py-1 rounded-full border ${
+                            addrLabel === l
+                              ? "bg-brand-200 border-brand-400 text-brand-800 font-semibold"
+                              : "bg-white border-brand-200 text-brand-500 hover:border-brand-400"
+                          }`}
+                          onClick={() => setAddrLabel(l)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      placeholder="Nama penerima"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrRecipient}
+                      onChange={(e) => setAddrRecipient(e.target.value)}
+                    />
+                    <input
+                      placeholder="No HP"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrPhone}
+                      onChange={(e) => setAddrPhone(e.target.value)}
+                    />
+                    <input
+                      placeholder="Alamat lengkap"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrLine}
+                      onChange={(e) => setAddrLine(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input placeholder="Provinsi" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrProvince} onChange={(e) => setAddrProvince(e.target.value)} />
+                      <input placeholder="Kota/Kab" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrRegency} onChange={(e) => setAddrRegency(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input placeholder="Kecamatan" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrDistrict} onChange={(e) => setAddrDistrict(e.target.value)} />
+                      <input placeholder="Kelurahan" className="px-3 py-1.5 rounded-lg border border-brand-200 text-xs" value={addrVillage} onChange={(e) => setAddrVillage(e.target.value)} />
+                    </div>
+                    <input
+                      placeholder="Kode Pos"
+                      className="w-full px-3 py-1.5 rounded-lg border border-brand-200 text-xs"
+                      value={addrPostal}
+                      onChange={(e) => setAddrPostal(e.target.value)}
+                    />
+                    <button
+                      onClick={saveAddr}
+                      disabled={savingAddr}
+                      className="w-full px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      {savingAddr ? "Menyimpan..." : "Tambah Alamat"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Password */}
-              <div>
-                <label className="block text-sm font-medium text-brand-700 mb-1">Password Baru</label>
+              <div className="pt-2 border-t border-brand-100">
+                <h4 className="text-sm font-bold text-brand-700 flex items-center gap-1.5 mb-2">
+                  <Eye className="w-4 h-4" /> Password
+                </h4>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
