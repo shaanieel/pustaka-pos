@@ -5,6 +5,7 @@ import { Camera, Upload, X, Loader2, Sparkles, CheckCircle2, Edit3 } from "lucid
 import toast from "react-hot-toast";
 import { compressImage, deleteCoverFromR2 } from "@/lib/compress";
 import { CoverEditor } from "./CoverEditor";
+import { CameraCapture } from "./CameraCapture";
 
 interface CoverUploaderProps {
   currentCover: string;
@@ -121,6 +122,15 @@ export function CoverUploader({
     setShowEditor(true);
   }, []);
 
+  // Camera capture state
+  const [showCamera, setShowCamera] = useState(false);
+
+  // Handle camera capture result
+  const handleCameraCapture = useCallback((blob: Blob) => {
+    setShowCamera(false);
+    openEditor(blob);
+  }, [openEditor]);
+
   // Handle hapus cover (X button)
   const handleClear = useCallback(async () => {
     if (currentCover && currentCover.startsWith("/api/cover/")) {
@@ -168,13 +178,7 @@ export function CoverUploader({
 
   // Handle camera capture
   const handleCamera = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.setAttribute("capture", "environment");
-      fileInputRef.current.click();
-      setTimeout(() => {
-        fileInputRef.current?.removeAttribute("capture");
-      }, 1000);
-    }
+    setShowCamera(true);
   };
 
   // Re-edit existing cover
@@ -233,6 +237,18 @@ export function CoverUploader({
       </div>
     );
   };
+
+  // Show camera capture
+  if (showCamera) {
+    return (
+      <div className="space-y-3">
+        <CameraCapture
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
+      </div>
+    );
+  }
 
   // Show editor modal
   if (showEditor && editorFile) {
