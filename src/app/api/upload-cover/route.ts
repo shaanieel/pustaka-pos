@@ -29,9 +29,10 @@ function genKey(contentType: string, filename?: string): string {
       : contentType.includes("gif")
         ? ".gif"
         : ".jpg";
-  return filename
-    ? `${filename}${ext}`
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+  // Always use unique key — filename prefix helps organize but
+  // never reuse the same R2 key (prevents browser cache showing old cover)
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return filename ? `${filename}-${unique}${ext}` : `${unique}${ext}`;
 }
 
 async function uploadToR2(
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
       const originalBuffer = await imgBlob.arrayBuffer();
       const ext = imgBlob.type.includes("png") ? "png" : imgBlob.type.includes("webp") ? "webp" : "jpg";
       const r2Key = filename
-        ? `${filename}.${ext}`
+        ? `${filename}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
         : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
       // Upload langsung ke R2 (tanpa AI pipeline untuk Google Books cover)

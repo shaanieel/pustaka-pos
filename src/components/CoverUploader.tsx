@@ -58,15 +58,11 @@ export function CoverUploader({
       onCoverChange(currentCover, true);
 
       try {
+
         // 1. Kompres gambar (maks 200KB)
         const compressed = await compressImage(file, 200);
 
-        // 2. Hapus foto lama dari R2 (kalau ada)
-        if (currentCover && currentCover.startsWith("/api/cover/")) {
-          await deleteCoverFromR2(currentCover);
-        }
-
-        // 3. Kirim ke server — AI pipeline + upload R2
+        // 2. Kirim ke server — upload R2
         setStage("processing");
         setStageMsg("Mengompres gambar...");
 
@@ -86,6 +82,12 @@ export function CoverUploader({
         }
 
         if (data.url) {
+          // 3. Hapus foto lama dari R2 (setelah upload sukses —
+          //    kalau upload gagal, cover lama tetap aman)
+          if (currentCover && currentCover.startsWith("/api/cover/")) {
+            await deleteCoverFromR2(currentCover);
+          }
+
           setStage("uploading");
           setStageMsg("Selesai — cover siap!");
           const kb = Math.round(compressed.size / 1024);

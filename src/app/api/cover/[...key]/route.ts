@@ -50,3 +50,32 @@ export async function GET(
     return new Response(`Proxy error: ${e.message}`, { status: 502 });
   }
 }
+
+// DELETE /api/cover/[...key]
+// Hapus cover dari R2 (digunakan pas upload cover baru atau hapus buku)
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ key: string[] }> }
+) {
+  const { key } = await params;
+  const keyStr = key.join("/");
+
+  if (!keyStr || keyStr.includes("..")) {
+    return new Response("Invalid key", { status: 400 });
+  }
+
+  try {
+    const res = await r2.fetch(`${R2_BASE}/${keyStr}`, { method: "DELETE" });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      return new Response(`R2 delete failed: ${res.status} ${errText}`, {
+        status: res.status,
+      });
+    }
+
+    return new Response("Deleted", { status: 200 });
+  } catch (e: any) {
+    return new Response(`Delete error: ${e.message}`, { status: 502 });
+  }
+}
