@@ -28,6 +28,7 @@ export function CoverUploader({
   // Editor state
   const [editorFile, setEditorFile] = useState<File | Blob | null>(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [fileKey, setFileKey] = useState(0);
 
   // Handle file after editor
   const handleEditedFile = useCallback(
@@ -114,6 +115,7 @@ export function CoverUploader({
   // Open editor with file
   const openEditor = useCallback((file: File | Blob) => {
     setEditorFile(file);
+    setFileKey(k => k + 1);
     setShowEditor(true);
   }, []);
 
@@ -237,6 +239,7 @@ export function CoverUploader({
         <label className="label">Edit Cover Buku</label>
         <div className="card p-4">
           <CoverEditor
+            key={fileKey}
             imageFile={editorFile}
             onSave={handleEditedFile}
             onCancel={() => {

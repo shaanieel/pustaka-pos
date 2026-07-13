@@ -388,7 +388,7 @@ export default function AddBookPage() {
             currentCover={form.cover_url}
             filename={form.isbn || form.title.replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40)}
             onCoverChange={(url, isUploading) => {
-              updateField("cover_url", url);
+              if (!isUploading) updateField("cover_url", url);
               setCoverUploading(isUploading);
             }}
           />
