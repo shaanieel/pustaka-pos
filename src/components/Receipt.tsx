@@ -104,32 +104,33 @@ export function Receipt({
         toast.error("Gagal download struk");
       }
     },
-    [order.id],
+    [order, customerName],
   );
 
-  // ─── Download PDF ──────────────────────────────────────
+  // ─── Download PDF (uses toPng like JPG/PNG — html2canvas breaks SVG alignment) ──
   const downloadPDF = useCallback(async () => {
     if (!receiptRef.current) return;
     try {
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const pdfWidth = 80;
-      const pdfHeight = (imgHeight / imgWidth) * pdfWidth;
-      const pdf = new jsPDF({
-        orientation: pdfHeight > pdfWidth ? "portrait" : "landscape",
-        unit: "mm", format: [pdfWidth, pdfHeight],
-      });
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${fileNameBase}.pdf`);
-      toast.success("Struk terdownload sebagai PDF");
+      const dataUrl = await toPng(receiptRef.current, { quality: 1, pixelRatio: 2 });
+      const img = new Image();
+      img.onload = () => {
+        const imgWidth = img.naturalWidth;
+        const imgHeight = img.naturalHeight;
+        const pdfWidth = 80;
+        const pdfHeight = (imgHeight / imgWidth) * pdfWidth;
+        const pdf = new jsPDF({
+          orientation: pdfHeight > pdfWidth ? "portrait" : "landscape",
+          unit: "mm", format: [pdfWidth, pdfHeight],
+        });
+        pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${fileNameBase}.pdf`);
+        toast.success("Struk terdownload sebagai PDF");
+      };
+      img.src = dataUrl;
     } catch {
       toast.error("Gagal download PDF");
     }
-  }, [order.id]);
+  }, [order, customerName]);
 
   // ─── Cetak ────────────────────────────────────────────
   const handlePrint = useCallback(async () => {
@@ -160,7 +161,7 @@ export function Receipt({
 
   // Payment status display
   const payStatus = order.payment_status || (paidAmount >= order.final_amount ? "lunas" : "belum_bayar");
-  const statusConfig = {
+  const statusConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
     lunas: { label: "LUNAS", color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
     belum_bayar: { label: "BELUM BAYAR", color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
     belum_lunas: { label: "BELUM LUNAS", color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
@@ -174,7 +175,7 @@ export function Receipt({
     ? new Date(order.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
     : "";
 
-  // QR code URL (user asked about QRIS — current is website QR)
+  // QR code URL
   const qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`https://${STORE.website}`)}`;
 
   const receiptId = order.id.slice(0, 8).toUpperCase();
@@ -200,19 +201,6 @@ export function Receipt({
             </button>
           </div>
           <div ref={receiptRef} id="receipt-content" className="bg-white font-sans">
-            {/* Style khusus html2canvas — fix alignment SVG + text */}
-            <style>{`
-              #receipt-content svg { display: inline-block; vertical-align: middle; }
-              #receipt-content .rx-row { display: flex; align-items: center; gap: 0.375rem; line-height: 1; }
-              #receipt-content .rx-row svg { flex-shrink: 0; }
-              #receipt-content .rx-row span { vertical-align: middle; line-height: 1.2; }
-              #receipt-content .rx-total { display: flex; justify-content: space-between; align-items: center; }
-              #receipt-content .rx-total span { line-height: 1; }
-              #receipt-content .rx-badge { display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0; }
-              #receipt-content .rx-badge span { line-height: 1.2; }
-              #receipt-content .rx-footer-row { display: flex; align-items: center; justify-content: center; gap: 0.75rem; }
-              #receipt-content .rx-footer-row span { display: inline-flex; align-items: center; gap: 0.125rem; }
-            `}</style>
             {/* ═══════════════════ HEADER ═══════════════════ */}
             <div className="px-6 pb-3 text-center pt-4">
               <div className="flex justify-center mb-2">
@@ -225,13 +213,13 @@ export function Receipt({
                 {STORE.subtitle}
               </p>
               {/* Alamat */}
-              <div className="rx-row justify-center text-[10px] text-brand-400 mt-2">
-                <Ico name="map" className="w-3 h-3 text-brand-400" />
+              <div className="flex items-center justify-center gap-1 text-[10px] text-brand-400 mt-2">
+                <Ico name="map" className="w-3 h-3 text-brand-400 shrink-0" />
                 <span>{STORE.address}, {STORE.city}</span>
               </div>
-              {/* WhatsApp (no "HP:" prefix) */}
-              <div className="rx-row justify-center text-[10px] text-brand-400 mt-0.5">
-                <Ico name="wa" className="w-3.5 h-3.5" />
+              {/* WhatsApp */}
+              <div className="flex items-center justify-center gap-1 text-[10px] text-brand-400 mt-0.5">
+                <Ico name="wa" className="w-3.5 h-3.5 shrink-0" />
                 <span>{STORE.whatsapp}</span>
               </div>
             </div>
@@ -244,25 +232,24 @@ export function Receipt({
               <h3 className="text-[11px] font-bold text-brand-600 uppercase tracking-wider mb-2">
                 Informasi Transaksi
               </h3>
-              {/* Dua kolom dengan vertical divider */}
               <div className="relative flex">
-                {/* Kolom kiri: No. Struk, Tanggal, Waktu */}
+                {/* Kolom kiri */}
                 <div className="flex-1 space-y-2 pr-3">
-                  <div className="rx-row">
+                  <div className="flex items-center gap-1.5">
                     <Ico name="receipt" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">No. Struk</span>
                       <span className="text-[11px] font-bold text-brand-800">#{receiptId}</span>
                     </div>
                   </div>
-                  <div className="rx-row">
+                  <div className="flex items-center gap-1.5">
                     <Ico name="calendar" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Tanggal</span>
                       <span className="text-[11px] font-bold text-brand-800">{dateFormatted}</span>
                     </div>
                   </div>
-                  <div className="rx-row">
+                  <div className="flex items-center gap-1.5">
                     <Ico name="clock" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Waktu</span>
@@ -274,23 +261,23 @@ export function Receipt({
                 {/* Vertical divider */}
                 <div className="w-px bg-brand-200 shrink-0" />
 
-                {/* Kolom kanan: Pelanggan, Kasir, Metode Bayar */}
+                {/* Kolom kanan */}
                 <div className="flex-1 space-y-2 pl-3">
-                  <div className="rx-row">
+                  <div className="flex items-center gap-1.5">
                     <Ico name="user" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Pelanggan</span>
                       <span className="text-[11px] font-bold text-brand-800">{customerName}</span>
                     </div>
                   </div>
-                  <div className="rx-row">
+                  <div className="flex items-center gap-1.5">
                     <Ico name="user" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Kasir</span>
                       <span className="text-[11px] font-bold text-brand-800">{cashierName}</span>
                     </div>
                   </div>
-                  <div className="rx-row">
+                  <div className="flex items-center gap-1.5">
                     <Ico name="wallet" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Metode Bayar</span>
@@ -345,13 +332,13 @@ export function Receipt({
                 </div>
               )}
               <hr className="border-t border-dashed border-brand-300" />
-              <div className="rx-total">
+              <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-brand-800 uppercase tracking-wider">Total</span>
                 <span className="text-lg font-black text-brand-700">{formatRupiah(order.final_amount)}</span>
               </div>
 
               {/* Status pembayaran badge */}
-              <div className={`rx-badge mt-2 mb-1 ${st.bg} ${st.border} border rounded-lg px-3`}>
+              <div className={`mt-2 mb-1 ${st.bg} ${st.border} border rounded-lg px-3 py-1.5 flex items-center justify-between`}>
                 <span className={`text-[11px] font-bold ${st.color} uppercase tracking-wider`}>
                   ● {st.label}
                 </span>
@@ -398,10 +385,10 @@ export function Receipt({
             {/* Contact info */}
             <div className="px-6 pb-3 text-center">
               <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-1">Kunjungi kami di:</p>
-              <div className="rx-footer-row text-[10px] text-brand-500">
-                <span><Ico name="globe" className="w-3 h-3 text-brand-400" /> {STORE.website}</span>
-                <span><Ico name="ig" className="w-3 h-3 text-brand-400" /> {STORE.instagram}</span>
-                <span><Ico name="map" className="w-3 h-3 text-brand-400" /> Pekanbaru</span>
+              <div className="flex items-center justify-center gap-3 text-[10px] text-brand-500">
+                <span className="flex items-center gap-0.5"><Ico name="globe" className="w-3 h-3 text-brand-400" /> {STORE.website}</span>
+                <span className="flex items-center gap-0.5"><Ico name="ig" className="w-3 h-3 text-brand-400" /> {STORE.instagram}</span>
+                <span className="flex items-center gap-0.5"><Ico name="map" className="w-3 h-3 text-brand-400" /> Pekanbaru</span>
               </div>
             </div>
 
