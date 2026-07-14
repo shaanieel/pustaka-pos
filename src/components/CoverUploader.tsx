@@ -169,10 +169,13 @@ export function CoverUploader({
     [openEditor]
   );
 
-  // Handle file picker
+  // Handle file picker — langsung upload tanpa editor
+  // (editor cuma buat kamera/capture, utk file langsung compress+upload biar HD)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) openEditor(file);
+    if (file) {
+      uploadToR2(file, "pilih file");
+    }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
