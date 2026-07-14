@@ -1,16 +1,18 @@
 // Kompresi gambar client-side via Canvas API
-// Jika size > maxKB → kompres (turunin quality, lalu resize dimensi) sampai ≤ maxKB
-// Jika size ≤ maxKB → return apa adanya
-// Output selalu JPEG (kompresi terbaik)
+// Output selalu JPEG
+// 1. Resize dulu ke maxLongSide biar dimensi turun
+// 2. Turunin quality JPEG sampe ≤ maxKB
+// 3. Kalo masih > maxKB di q=0.1, baru resize lebih kecil (min 600px)
 
 export async function compressImage(
   file: File | Blob,
-  maxKB = 200
+  maxKB = 200,
+  /** Maksimum pixel di sisi terpanjang. Default 1200 — HD buat retina. */
+  maxLongSide = 1200
 ): Promise<Blob> {
-  // Sudah di bawah limit? return apa adanya
+  // Udah di bawah limit? balikin apa adanya
   if (file.size <= maxKB * 1024) return file;
 
-  // Load image ke <img> element
   const img = new Image();
   const url = URL.createObjectURL(file);
   try {
@@ -23,37 +25,53 @@ export async function compressImage(
     URL.revokeObjectURL(url);
   }
 
-  let blob: Blob = file;
-  const originalW = img.naturalWidth;
-  const originalH = img.naturalHeight;
+  // ── Step 0: hitung target dimensi (maxLongSide) ──
+  const ow = img.naturalWidth;
+  const oh = img.naturalHeight;
+  const long = Math.max(ow, oh);
+  let targetW: number, targetH: number;
 
-  // Tahap 1: turunin quality JPEG (0.9 → 0.1)
-  let quality = 0.9;
-  while (quality >= 0.1 && blob.size > maxKB * 1024) {
+  if (long > maxLongSide) {
+    const s = maxLongSide / long;
+    targetW = Math.round(ow * s);
+    targetH = Math.round(oh * s);
+  } else {
+    targetW = ow;
+    targetH = oh;
+  }
+
+  let blob: Blob = file;
+
+  // ── Step 1: turunin quality (0.9 → 0.1) ──
+  for (let q = 0.9; q >= 0.1; q -= 0.1) {
+    if (blob.size <= maxKB * 1024) break;
     const canvas = document.createElement("canvas");
-    canvas.width = originalW;
-    canvas.height = originalH;
+    canvas.width = targetW;
+    canvas.height = targetH;
     const ctx = canvas.getContext("2d");
     if (!ctx) break;
-    ctx.fillStyle = "#fff"; // white bg untuk PNG transparan
-    ctx.fillRect(0, 0, originalW, originalH);
-    ctx.drawImage(img, 0, 0);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, targetW, targetH);
+    // imageSmoothingEnabled true by default — biar downscale halus
+    ctx.drawImage(img, 0, 0, targetW, targetH);
 
     blob = await new Promise<Blob>((resolve) => {
       canvas.toBlob(
         (b) => resolve(b || file),
         "image/jpeg",
-        quality
+        q
       );
     });
-    quality -= 0.1;
   }
 
-  // Tahap 2: kalau masih kebesaran, resize dimensi (90% → 10%)
+  // ── Step 2: kalo MASIH > maxKB di q=0.1, turunin dimensi ──
   let scale = 0.9;
   while (scale >= 0.1 && blob.size > maxKB * 1024) {
-    const w = Math.floor(originalW * scale);
-    const h = Math.floor(originalH * scale);
+    const w = Math.round(targetW * scale);
+    const h = Math.round(targetH * scale);
+    // Gak boleh lebih kecil dari 600px di sisi terpanjang
+    if (Math.max(w, h) < 600) break;
+
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
