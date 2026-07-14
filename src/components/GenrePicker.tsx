@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, ChevronDown, ChevronRight, Loader2, Pencil, Trash2, Check, Edit3 } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, Loader2, Pencil, Trash2, Check, Edit3, ArrowUp, ArrowDown } from "lucide-react";
 import { clsx } from "clsx";
 import toast from "react-hot-toast";
 
@@ -118,6 +118,25 @@ export function GenrePicker({
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(`${label} berhasil dihapus`);
+      await fetchGenres();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal");
+    }
+  }
+
+  async function handleReorder(target: "genre" | "subgenre", id: number, direction: "up" | "down") {
+    try {
+      const res = await fetch("/api/genres", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "reorder", target, id, direction }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (res.status === 400) toast(err.error || "Gagal reorder");
+        else throw new Error(err.error);
+        return;
+      }
       await fetchGenres();
     } catch (err: any) {
       toast.error(err.message || "Gagal");
@@ -303,6 +322,23 @@ export function GenrePicker({
                 >
                   <Plus className="w-3.5 h-3.5" />
                 </button>
+                {/* Reorder genre */}
+                <button
+                  type="button"
+                  onClick={() => handleReorder("genre", genre.id, "up")}
+                  className="p-1.5 rounded-lg hover:bg-brand-100 text-brand-400 hover:text-brand-600"
+                  title="Naik"
+                >
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReorder("genre", genre.id, "down")}
+                  className="p-1.5 rounded-lg hover:bg-brand-100 text-brand-400 hover:text-brand-600"
+                  title="Turun"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {/* Subgenre grid */}
@@ -342,6 +378,23 @@ export function GenrePicker({
                             title="Hapus subgenre"
                           >
                             <X className="w-2.5 h-2.5" />
+                          </button>
+                          {/* Reorder subgenre */}
+                          <button
+                            type="button"
+                            onClick={() => handleReorder("subgenre", sub.id, "up")}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded-full hover:bg-brand-200 text-brand-400 hover:text-brand-600 transition-all"
+                            title="Naik"
+                          >
+                            <ArrowUp className="w-2.5 h-2.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReorder("subgenre", sub.id, "down")}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded-full hover:bg-brand-200 text-brand-400 hover:text-brand-600 transition-all"
+                            title="Turun"
+                          >
+                            <ArrowDown className="w-2.5 h-2.5" />
                           </button>
                         </div>
                       );
