@@ -200,6 +200,19 @@ export function Receipt({
             </button>
           </div>
           <div ref={receiptRef} id="receipt-content" className="bg-white font-sans">
+            {/* Style khusus html2canvas — fix alignment SVG + text */}
+            <style>{`
+              #receipt-content svg { display: inline-block; vertical-align: middle; }
+              #receipt-content .rx-row { display: flex; align-items: center; gap: 0.375rem; line-height: 1; }
+              #receipt-content .rx-row svg { flex-shrink: 0; }
+              #receipt-content .rx-row span { vertical-align: middle; line-height: 1.2; }
+              #receipt-content .rx-total { display: flex; justify-content: space-between; align-items: center; }
+              #receipt-content .rx-total span { line-height: 1; }
+              #receipt-content .rx-badge { display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0; }
+              #receipt-content .rx-badge span { line-height: 1.2; }
+              #receipt-content .rx-footer-row { display: flex; align-items: center; justify-content: center; gap: 0.75rem; }
+              #receipt-content .rx-footer-row span { display: inline-flex; align-items: center; gap: 0.125rem; }
+            `}</style>
             {/* ═══════════════════ HEADER ═══════════════════ */}
             <div className="px-6 pb-3 text-center pt-4">
               <div className="flex justify-center mb-2">
@@ -212,13 +225,13 @@ export function Receipt({
                 {STORE.subtitle}
               </p>
               {/* Alamat */}
-              <div className="flex items-center justify-center gap-1 text-[10px] text-brand-400 mt-2">
-                <Ico name="map" className="w-3 h-3 text-brand-400 shrink-0" />
+              <div className="rx-row justify-center text-[10px] text-brand-400 mt-2">
+                <Ico name="map" className="w-3 h-3 text-brand-400" />
                 <span>{STORE.address}, {STORE.city}</span>
               </div>
               {/* WhatsApp (no "HP:" prefix) */}
-              <div className="flex items-center justify-center gap-1 text-[10px] text-brand-400 mt-0.5">
-                <Ico name="wa" className="w-3.5 h-3.5 shrink-0" />
+              <div className="rx-row justify-center text-[10px] text-brand-400 mt-0.5">
+                <Ico name="wa" className="w-3.5 h-3.5" />
                 <span>{STORE.whatsapp}</span>
               </div>
             </div>
@@ -235,21 +248,21 @@ export function Receipt({
               <div className="relative flex">
                 {/* Kolom kiri: No. Struk, Tanggal, Waktu */}
                 <div className="flex-1 space-y-2 pr-3">
-                  <div className="flex items-center gap-1.5">
+                  <div className="rx-row">
                     <Ico name="receipt" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">No. Struk</span>
                       <span className="text-[11px] font-bold text-brand-800">#{receiptId}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="rx-row">
                     <Ico name="calendar" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Tanggal</span>
                       <span className="text-[11px] font-bold text-brand-800">{dateFormatted}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="rx-row">
                     <Ico name="clock" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Waktu</span>
@@ -263,21 +276,21 @@ export function Receipt({
 
                 {/* Kolom kanan: Pelanggan, Kasir, Metode Bayar */}
                 <div className="flex-1 space-y-2 pl-3">
-                  <div className="flex items-center gap-1.5">
+                  <div className="rx-row">
                     <Ico name="user" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Pelanggan</span>
                       <span className="text-[11px] font-bold text-brand-800">{customerName}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="rx-row">
                     <Ico name="user" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Kasir</span>
                       <span className="text-[11px] font-bold text-brand-800">{cashierName}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="rx-row">
                     <Ico name="wallet" />
                     <div className="flex items-baseline gap-1">
                       <span className="text-[11px] text-brand-500">Metode Bayar</span>
@@ -332,13 +345,13 @@ export function Receipt({
                 </div>
               )}
               <hr className="border-t border-dashed border-brand-300" />
-              <div className="flex justify-between items-center">
+              <div className="rx-total">
                 <span className="text-sm font-bold text-brand-800 uppercase tracking-wider">Total</span>
                 <span className="text-lg font-black text-brand-700">{formatRupiah(order.final_amount)}</span>
               </div>
 
               {/* Status pembayaran badge */}
-              <div className={`mt-2 mb-1 ${st.bg} ${st.border} border rounded-lg px-3 py-1.5 flex items-center justify-between`}>
+              <div className={`rx-badge mt-2 mb-1 ${st.bg} ${st.border} border rounded-lg px-3`}>
                 <span className={`text-[11px] font-bold ${st.color} uppercase tracking-wider`}>
                   ● {st.label}
                 </span>
@@ -385,10 +398,10 @@ export function Receipt({
             {/* Contact info */}
             <div className="px-6 pb-3 text-center">
               <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-1">Kunjungi kami di:</p>
-              <div className="flex items-center justify-center gap-3 text-[10px] text-brand-500">
-                <span className="flex items-center gap-0.5"><Ico name="globe" className="w-3 h-3 text-brand-400" /> {STORE.website}</span>
-                <span className="flex items-center gap-0.5"><Ico name="ig" className="w-3 h-3 text-brand-400" /> {STORE.instagram}</span>
-                <span className="flex items-center gap-0.5"><Ico name="map" className="w-3 h-3 text-brand-400" /> Pekanbaru</span>
+              <div className="rx-footer-row text-[10px] text-brand-500">
+                <span><Ico name="globe" className="w-3 h-3 text-brand-400" /> {STORE.website}</span>
+                <span><Ico name="ig" className="w-3 h-3 text-brand-400" /> {STORE.instagram}</span>
+                <span><Ico name="map" className="w-3 h-3 text-brand-400" /> Pekanbaru</span>
               </div>
             </div>
 
