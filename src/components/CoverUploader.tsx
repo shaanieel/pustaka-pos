@@ -60,8 +60,8 @@ export function CoverUploader({
 
       try {
 
-        // 1. Kompres gambar (maks 200KB)
-        const compressed = await compressImage(file, 200);
+        // 1. Kompres gambar (maks 500KB, stepwise downscale biar tajam)
+        const compressed = await compressImage(file);
 
         // 2. Kirim ke server — upload R2
         setStage("processing");

@@ -1,16 +1,15 @@
-// Kompresi gambar client-side via Canvas API
+// Kompresi gambar client-side via Canvas API — stepwise downscaling
 // Output selalu JPEG
-// 1. Resize dulu ke maxLongSide biar dimensi turun
+// 1. Stepwise resize ke maxLongSide (turun 50% tiap langkah)
 // 2. Turunin quality JPEG sampe ≤ maxKB
-// 3. Kalo masih > maxKB di q=0.1, baru resize lebih kecil (min 600px)
+// 3. Stepwise = hasil resize jauh lebih tajam
 
 export async function compressImage(
   file: File | Blob,
-  maxKB = 200,
-  /** Maksimum pixel di sisi terpanjang. Default 1200 — HD buat retina. */
+  maxKB = 500,
+  /** Maksimum pixel di sisi terpanjang. Default 1200 — HD retina. */
   maxLongSide = 1200
 ): Promise<Blob> {
-  // Udah di bawah limit? balikin apa adanya
   if (file.size <= maxKB * 1024) return file;
 
   const img = new Image();
@@ -25,7 +24,7 @@ export async function compressImage(
     URL.revokeObjectURL(url);
   }
 
-  // ── Step 0: hitung target dimensi (maxLongSide) ──
+  // ── Step 0: hitung target dimensi ──
   const ow = img.naturalWidth;
   const oh = img.naturalHeight;
   const long = Math.max(ow, oh);
@@ -40,26 +39,68 @@ export async function compressImage(
     targetH = oh;
   }
 
-  let blob: Blob = file;
+  // ── Stepwise downscale untuk hasil tajam ──
+  // Turunin resolusi bertahap (maks 50% tiap langkah) biar ga soft
+  function stepwiseResize(
+    source: HTMLImageElement | HTMLCanvasElement,
+    finalW: number,
+    finalH: number
+  ): HTMLCanvasElement {
+    let srcW =
+      source instanceof HTMLImageElement
+        ? source.naturalWidth || source.width
+        : source.width;
+    let srcH =
+      source instanceof HTMLImageElement
+        ? source.naturalHeight || source.height
+        : source.height;
 
-  // ── Step 1: turunin quality (0.9 → 0.1) ──
-  for (let q = 0.9; q >= 0.1; q -= 0.1) {
+    let src: HTMLImageElement | HTMLCanvasElement = source;
+
+    while (srcW > finalW * 1.5 || srcH > finalH * 1.5) {
+      // Turunin 50% atau sampe target, mana yg lebih besar
+      const nextW = Math.max(Math.round(srcW / 2), finalW);
+      const nextH = Math.max(Math.round(srcH / 2), finalH);
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = nextW;
+      tempCanvas.height = nextH;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) break;
+      tempCtx.fillStyle = "#fff";
+      tempCtx.fillRect(0, 0, nextW, nextH);
+      tempCtx.drawImage(src, 0, 0, nextW, nextH);
+
+      srcW = nextW;
+      srcH = nextH;
+      src = tempCanvas;
+    }
+
+    // Final draw ke target
+    const finalCanvas = document.createElement("canvas");
+    finalCanvas.width = finalW;
+    finalCanvas.height = finalH;
+    const finalCtx = finalCanvas.getContext("2d");
+    if (finalCtx) {
+      finalCtx.fillStyle = "#fff";
+      finalCtx.fillRect(0, 0, finalW, finalH);
+      finalCtx.drawImage(src, 0, 0, finalW, finalH);
+    }
+    return finalCanvas;
+  }
+
+  const resizedCanvas = stepwiseResize(img, targetW, targetH);
+
+  // ── Step 1: turunin quality (0.95 → 0.1) ──
+  let blob: Blob = file;
+  for (let q = 0.95; q >= 0.1; q -= 0.05) {
     if (blob.size <= maxKB * 1024) break;
-    const canvas = document.createElement("canvas");
-    canvas.width = targetW;
-    canvas.height = targetH;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) break;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, targetW, targetH);
-    // imageSmoothingEnabled true by default — biar downscale halus
-    ctx.drawImage(img, 0, 0, targetW, targetH);
 
     blob = await new Promise<Blob>((resolve) => {
-      canvas.toBlob(
+      resizedCanvas.toBlob(
         (b) => resolve(b || file),
         "image/jpeg",
-        q
+        Math.round(q * 100) / 100
       );
     });
   }
@@ -69,7 +110,6 @@ export async function compressImage(
   while (scale >= 0.1 && blob.size > maxKB * 1024) {
     const w = Math.round(targetW * scale);
     const h = Math.round(targetH * scale);
-    // Gak boleh lebih kecil dari 600px di sisi terpanjang
     if (Math.max(w, h) < 600) break;
 
     const canvas = document.createElement("canvas");
@@ -79,13 +119,13 @@ export async function compressImage(
     if (!ctx) break;
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
+    ctx.drawImage(resizedCanvas, 0, 0, w, h);
 
     blob = await new Promise<Blob>((resolve) => {
       canvas.toBlob(
         (b) => resolve(b || file),
         "image/jpeg",
-        0.7
+        0.75
       );
     });
     scale -= 0.1;
@@ -95,7 +135,6 @@ export async function compressImage(
 }
 
 // Extract R2 object key dari proxy URL
-// "/api/cover/12345-abc.jpg" → "12345-abc.jpg"
 export function extractKeyFromUrl(url: string): string | null {
   if (!url) return null;
   const match = url.match(/\/api\/cover\/(.+)$/);
