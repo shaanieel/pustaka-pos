@@ -96,7 +96,7 @@ export function Receipt({
             ? await toPng(receiptRef.current, { quality: 1, pixelRatio: 2 })
             : await toJpeg(receiptRef.current, { quality: 0.95, pixelRatio: 2 });
         const link = document.createElement("a");
-        link.download = `struk-${order.id.slice(0, 8)}.${format}`;
+        link.download = `${fileNameBase}.${format}`;
         link.href = dataUrl;
         link.click();
         toast.success(`Struk terdownload sebagai ${format.toUpperCase()}`);
@@ -124,7 +124,7 @@ export function Receipt({
         unit: "mm", format: [pdfWidth, pdfHeight],
       });
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`struk-${order.id.slice(0, 8)}.pdf`);
+      pdf.save(`${fileNameBase}.pdf`);
       toast.success("Struk terdownload sebagai PDF");
     } catch {
       toast.error("Gagal download PDF");
@@ -179,20 +179,29 @@ export function Receipt({
 
   const receiptId = order.id.slice(0, 8).toUpperCase();
 
+  // Filename: "bunayya putra-nama pembeli-tanggal"
+  const safeName = (customerName || "unknown")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const datePart = order.created_at
+    ? new Date(order.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
+    : "unknown-date";
+  const fileNameBase = `bunayya putra-${safeName}-${datePart}`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-scale-in">
       <div className="bg-white rounded-3xl shadow-float w-full max-w-md max-h-[93vh] overflow-hidden flex flex-col">
         <div className="flex-1 overflow-y-auto overscroll-contain">
+          {/* Close — di luar receiptRef biar ga ikut ke-screenshot */}
+          <div className="flex justify-end px-6 pt-4 pb-0">
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
           <div ref={receiptRef} id="receipt-content" className="bg-white font-sans">
-            {/* Close */}
-            <div className="flex justify-end px-6 pt-4 pb-0" data-html2canvas-ignore="true">
-              <button onClick={onClose} className="p-2 rounded-xl hover:bg-brand-50 text-brand-400 hover:text-brand-600 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
             {/* ═══════════════════ HEADER ═══════════════════ */}
-            <div className="px-6 pb-3 text-center">
+            <div className="px-6 pb-3 text-center pt-4">
               <div className="flex justify-center mb-2">
                 <StoreLogo className="w-14 h-auto" />
               </div>
