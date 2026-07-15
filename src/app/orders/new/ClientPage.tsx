@@ -134,13 +134,13 @@ export default function NewOrderPage() {
         clearInterval(interval);
         setQrisStatus('success');
         setSavedOrder((prev) => prev ? { ...prev, ...data } : prev);
+        // Kalo paymentMethod atau qrisStatus berubah di tengah, cancelled=true,
+        // tapi kita pake ref biar redirect tetep jalan
         // Redirect ke receipt setelah animasi
         setTimeout(() => {
-          if (!cancelled) {
-            setShowPayment(false);
-            setShowReceipt(true);
-          }
-        }, 2500);
+          setShowPayment(false);
+          setShowReceipt(true);
+        }, 1800);
       }
     }, 5000);
 
