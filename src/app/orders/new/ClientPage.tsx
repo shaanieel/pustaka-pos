@@ -9,6 +9,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
 import { formatRupiah } from "@/lib/utils";
+import { QRCodeCanvas } from "qrcode.react";
 import {
   ArrowLeft,
   ShoppingCart,
@@ -21,7 +22,6 @@ import {
   Wallet,
   CheckCircle2,
   ScanLine,
-  ImageOff,
   Loader2,
   ChevronUp,
   Banknote,
@@ -29,10 +29,13 @@ import {
   ArrowRightLeft,
   Phone,
   X,
+  Copy,
+  ImageOff,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { QRIS_STATIC, convertQRIS, generateKodeUnik } from "@/lib/qris";
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -68,11 +71,32 @@ export default function NewOrderPage() {
   const [saving, setSaving] = useState(false);
   const [savedOrder, setSavedOrder] = useState<Order | null>(null);
   const [savedItems, setSavedItems] = useState<OrderItem[]>([]);
+  // Payment
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("tunai");
   const [showPayment, setShowPayment] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const changeAmount = Math.max(0, paymentAmount - (savedOrder?.final_amount || 0));
+
+  // QRIS
+  const [qrisString, setQrisString] = useState<string>("");
+  const [qrisKodeUnik, setQrisKodeUnik] = useState<number>(0);
+
+  // Generate QRIS dinamis saat modal bayar terbuka + method = qris
+  useEffect(() => {
+    if (showPayment && paymentMethod === "qris" && savedOrder && !qrisString) {
+      const kode = generateKodeUnik();
+      setQrisKodeUnik(kode);
+      const amountWithCode = savedOrder.final_amount + kode;
+      const result = convertQRIS(QRIS_STATIC, amountWithCode);
+      setQrisString(result);
+    }
+    // Reset when modal closes
+    if (!showPayment) {
+      setQrisString("");
+      setQrisKodeUnik(0);
+    }
+  }, [showPayment, paymentMethod, savedOrder]);
 
   // Fetch ALL books on mount
   useEffect(() => {
@@ -367,6 +391,38 @@ export default function NewOrderPage() {
 
   async function handlePaymentSubmit() {
     if (!savedOrder) return;
+
+    // QRIS: bayar penuh, no manual amount
+    if (paymentMethod === "qris") {
+      if (!qrisString) {
+        toast.error("QRIS belum siap");
+        return;
+      }
+      try {
+        const { error } = await supabase
+          .from("orders")
+          .update({
+            payment_method: "qris",
+            payment_status: "lunas",
+            paid_amount: savedOrder.final_amount + qrisKodeUnik,
+          })
+          .eq("id", savedOrder.id);
+        if (error) throw error;
+        setSavedOrder({
+          ...savedOrder,
+          payment_method: "qris",
+          payment_status: "lunas",
+          paid_amount: savedOrder.final_amount + qrisKodeUnik,
+        });
+        setShowPayment(false);
+        setShowReceipt(true);
+      } catch (err: any) {
+        toast.error(err.message || "Gagal menyimpan pembayaran");
+      }
+      return;
+    }
+
+    // Tunai / Transfer
     const total = savedOrder.final_amount;
     if (paymentAmount <= 0) {
       toast.error("Masukkan jumlah pembayaran");
@@ -420,6 +476,8 @@ export default function NewOrderPage() {
     setDiscount(0);
     setPaymentAmount(0);
     setPaymentMethod("tunai");
+    setQrisString("");
+    setQrisKodeUnik(0);
     setNewCustomer({ name: "", phone: "", email: "" });
     setShowAllCustomers(false);
     setCustomerSearch("");
@@ -1203,7 +1261,25 @@ export default function NewOrderPage() {
                 </button>
               </div>
 
-              {/* Jumlah Dibayar */}
+              {/* Jumlah Dibayar — QRIS */}
+              {paymentMethod === "qris" && qrisString ? (
+                <div className="space-y-4 pb-3 text-center">
+                  <div className="bg-white p-4 rounded-2xl shadow-lg inline-block mx-auto">
+                    <QRCodeCanvas value={qrisString} size={220} level="M" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-black text-brand-700">
+                      {formatRupiah((savedOrder?.final_amount || 0) + qrisKodeUnik)}
+                    </p>
+                    <p className="text-xs text-brand-500 mt-1">
+                      Scan QRIS untuk bayar via GoPay / OVO / DANA
+                    </p>
+                    <p className="text-[10px] text-brand-400 mt-0.5">
+                      Kode unik: {qrisKodeUnik} · Harga: {formatRupiah(savedOrder?.final_amount || 0)} + {qrisKodeUnik}
+                    </p>
+                  </div>
+                </div>
+              ) : /* Jumlah Dibayar — Tunai / Transfer */ (
               <div className="space-y-3 pb-3">
                 <label className="label flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-brand-500" />
@@ -1222,10 +1298,10 @@ export default function NewOrderPage() {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setPaymentAmount(savedOrder.final_amount)}
+                  <button onClick={() => setPaymentAmount(savedOrder?.final_amount || 0)}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-all"
                   >Lunas</button>
-                  <button onClick={() => setPaymentAmount(Math.floor(savedOrder.final_amount / 2))}
+                  <button onClick={() => setPaymentAmount(Math.floor((savedOrder?.final_amount || 0) / 2))}
                     className="flex-1 text-[11px] leading-tight font-bold py-2.5 px-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all"
                   >Bayar Setengah</button>
                   <button onClick={() => setPaymentAmount(0)}
@@ -1235,14 +1311,14 @@ export default function NewOrderPage() {
                 {paymentAmount > 0 && (
                   <div className="flex justify-between items-center text-sm px-1">
                     <span className="text-brand-500">
-                      {paymentAmount >= savedOrder.final_amount ? "Kembalian" : "Sisa hutang"}
+                      {paymentAmount >= (savedOrder?.final_amount || 0) ? "Kembalian" : "Sisa hutang"}
                     </span>
                     <span className={`font-bold ${
-                      paymentAmount >= savedOrder.final_amount ? "text-brand-700" : "text-amber-600"
+                      paymentAmount >= (savedOrder?.final_amount || 0) ? "text-brand-700" : "text-amber-600"
                     }`}>
-                      {paymentAmount >= savedOrder.final_amount
-                        ? formatRupiah(paymentAmount - savedOrder.final_amount)
-                        : formatRupiah(savedOrder.final_amount - paymentAmount)
+                      {paymentAmount >= (savedOrder?.final_amount || 0)
+                        ? formatRupiah(paymentAmount - (savedOrder?.final_amount || 0))
+                        : formatRupiah((savedOrder?.final_amount || 0) - paymentAmount)
                       }
                     </span>
                   </div>
@@ -1250,13 +1326,14 @@ export default function NewOrderPage() {
                 <div className="flex justify-center">
                   {paymentAmount <= 0 ? (
                     <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">● Belum Bayar</span>
-                  ) : paymentAmount >= savedOrder.final_amount ? (
+                  ) : paymentAmount >= (savedOrder?.final_amount || 0) ? (
                     <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">● Lunas</span>
                   ) : (
                     <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">● Belum Lunas</span>
                   )}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Bottom buttons */}
@@ -1266,7 +1343,7 @@ export default function NewOrderPage() {
               >Batal</button>
               <button onClick={handlePaymentSubmit} className="btn-primary flex-1">
                 <CheckCircle2 className="w-4 h-4" />
-                Konfirmasi
+                {paymentMethod === "qris" ? "Sudah Dibayar" : "Konfirmasi"}
               </button>
             </div>
           </div>
