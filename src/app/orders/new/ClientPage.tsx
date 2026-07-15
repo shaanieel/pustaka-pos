@@ -90,6 +90,19 @@ export default function NewOrderPage() {
       const amountWithCode = savedOrder.final_amount + kode;
       const result = convertQRIS(QRIS_STATIC, amountWithCode);
       setQrisString(result);
+
+      // Catat ke DB biar worker bisa match via paid_amount
+      supabase
+        .from("orders")
+        .update({
+          payment_method: "qris",
+          payment_status: "waiting_payment",
+          paid_amount: amountWithCode,
+        })
+        .eq("id", savedOrder.id)
+        .then(({ error }) => {
+          if (error) console.error("Gagal set waiting_payment:", error);
+        });
     }
     // Reset when modal closes
     if (!showPayment) {
