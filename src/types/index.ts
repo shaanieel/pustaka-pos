@@ -27,7 +27,7 @@ export interface Customer {
 }
 
 export type PaymentMethod = "tunai" | "qris" | "transfer";
-export type PaymentStatus = "lunas" | "belum_bayar" | "belum_lunas";
+export type PaymentStatus = "lunas" | "belum_bayar" | "belum_lunas" | "waiting_payment";
 
 export interface Order {
   id: string;
@@ -41,6 +41,7 @@ export interface Order {
   payment_method: PaymentMethod | null;
   payment_status: PaymentStatus | null;
   paid_amount: number | null;
+  payment_confirmed_at: string | null;
   created_at: string;
 }
 

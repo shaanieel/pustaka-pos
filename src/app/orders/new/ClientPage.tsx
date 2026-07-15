@@ -30,6 +30,7 @@ import {
   Phone,
   X,
   Copy,
+  PartyPopper,
   ImageOff,
 } from "lucide-react";
 import Link from "next/link";
@@ -81,6 +82,7 @@ export default function NewOrderPage() {
   // QRIS
   const [qrisString, setQrisString] = useState<string>("");
   const [qrisKodeUnik, setQrisKodeUnik] = useState<number>(0);
+  const [qrisStatus, setQrisStatus] = useState<'idle' | 'waiting' | 'success'>('idle');
 
   // Generate QRIS dinamis saat modal bayar terbuka + method = qris
   useEffect(() => {
@@ -90,6 +92,7 @@ export default function NewOrderPage() {
       const amountWithCode = savedOrder.final_amount + kode;
       const result = convertQRIS(QRIS_STATIC, amountWithCode);
       setQrisString(result);
+      setQrisStatus('waiting');
 
       // Catat ke DB biar worker bisa match via paid_amount
       supabase
@@ -104,12 +107,45 @@ export default function NewOrderPage() {
           if (error) console.error("Gagal set waiting_payment:", error);
         });
     }
-    // Reset when modal closes
-    if (!showPayment) {
+    // Reset when modal closes OR switching away from QRIS
+    if (!showPayment || paymentMethod !== "qris") {
       setQrisString("");
       setQrisKodeUnik(0);
+      setQrisStatus('idle');
     }
   }, [showPayment, paymentMethod, savedOrder]);
+
+  // ── Polling: auto-detect QRIS payment lunas ──
+  useEffect(() => {
+    if (paymentMethod !== 'qris' || qrisStatus !== 'waiting' || !savedOrder) return;
+
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('payment_status, paid_amount, payment_confirmed_at')
+        .eq('id', savedOrder.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error) return;
+
+      if (data?.payment_status === 'lunas') {
+        clearInterval(interval);
+        setQrisStatus('success');
+        setSavedOrder((prev) => prev ? { ...prev, ...data } : prev);
+        // Redirect ke receipt setelah animasi
+        setTimeout(() => {
+          if (!cancelled) {
+            setShowPayment(false);
+            setShowReceipt(true);
+          }
+        }, 2500);
+      }
+    }, 5000);
+
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [paymentMethod, qrisStatus, savedOrder?.id]);
 
   // Fetch ALL books on mount
   useEffect(() => {
@@ -418,6 +454,7 @@ export default function NewOrderPage() {
             payment_method: "qris",
             payment_status: "lunas",
             paid_amount: savedOrder.final_amount + qrisKodeUnik,
+            payment_confirmed_at: new Date().toISOString(),
           })
           .eq("id", savedOrder.id);
         if (error) throw error;
@@ -426,6 +463,7 @@ export default function NewOrderPage() {
           payment_method: "qris",
           payment_status: "lunas",
           paid_amount: savedOrder.final_amount + qrisKodeUnik,
+          payment_confirmed_at: new Date().toISOString(),
         });
         setShowPayment(false);
         setShowReceipt(true);
@@ -491,6 +529,7 @@ export default function NewOrderPage() {
     setPaymentMethod("tunai");
     setQrisString("");
     setQrisKodeUnik(0);
+    setQrisStatus('idle');
     setNewCustomer({ name: "", phone: "", email: "" });
     setShowAllCustomers(false);
     setCustomerSearch("");
@@ -514,6 +553,61 @@ export default function NewOrderPage() {
   // ===== POSTER GRID + BOTTOM SHEET LAYOUT =====
   return (
     <>
+      {/* QRIS Animation Styles */}
+      <style>{`
+        .scanner-line {
+          position: absolute;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, transparent, #10b981, transparent);
+          animation: scan 2s ease-in-out infinite;
+          z-index: 5;
+        }
+        @keyframes scan {
+          0%, 100% { top: 0; }
+          50% { top: 100%; }
+        }
+        @keyframes bounce-in {
+          0% { transform: scale(0); opacity: 0; }
+          50% { transform: scale(1.15); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-bounce-in {
+          animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out forwards;
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.4s ease-out forwards;
+          opacity: 0;
+        }
+        .confetti-container {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          overflow: hidden;
+        }
+        .confetti-piece {
+          position: absolute;
+          top: -10px;
+          font-size: 20px;
+          animation: confetti-fall 1.5s ease-in forwards;
+        }
+        @keyframes confetti-fall {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(200px) rotate(720deg); opacity: 0; }
+        }
+      `}</style>
       {/* Header */}
       <div className="flex items-center gap-3 mb-4 lg:mb-5">
         <Link href="/orders" className="btn-ghost p-2 -ml-2 shrink-0">
@@ -1276,21 +1370,73 @@ export default function NewOrderPage() {
 
               {/* Jumlah Dibayar — QRIS */}
               {paymentMethod === "qris" && qrisString ? (
-                <div className="space-y-4 pb-3 text-center">
-                  <div className="bg-white p-4 rounded-2xl shadow-lg inline-block mx-auto">
+                <div className="space-y-4 pb-3 text-center relative">
+                  {/* QR Code */}
+                  <div className="bg-white p-4 rounded-2xl shadow-lg inline-block mx-auto relative overflow-hidden">
                     <QRCodeCanvas value={qrisString} size={220} level="M" />
+                    {/* Scanning animation — waiting */}
+                    {qrisStatus === 'waiting' && (
+                      <>
+                        <div className="absolute inset-0 bg-black/5 pointer-events-none" />
+                        <div className="scanner-line" />
+                        <div className="absolute inset-0 border-2 border-emerald-400/40 rounded-xl pointer-events-none" />
+                      </>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-lg font-black text-brand-700">
-                      {formatRupiah((savedOrder?.final_amount || 0) + qrisKodeUnik)}
-                    </p>
-                    <p className="text-xs text-brand-500 mt-1">
-                      Scan QRIS untuk bayar via GoPay / OVO / DANA
-                    </p>
-                    <p className="text-[10px] text-brand-400 mt-0.5">
-                      Kode unik: {qrisKodeUnik} · Harga: {formatRupiah(savedOrder?.final_amount || 0)} + {qrisKodeUnik}
-                    </p>
-                  </div>
+                  {/* Waiting / Info */}
+                  {qrisStatus === 'waiting' && (
+                    <div className="space-y-2 animate-pulse">
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:0ms]" />
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:150ms]" />
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:300ms]" />
+                      </div>
+                      <p className="text-sm font-bold text-emerald-600">
+                        Menunggu Pembayaran...
+                      </p>
+                      <p className="text-xs text-brand-500">
+                        Scan QRIS menggunakan GoPay / OVO / DANA
+                      </p>
+                      <p className="text-lg font-black text-brand-700">
+                        {formatRupiah((savedOrder?.final_amount || 0) + qrisKodeUnik)}
+                      </p>
+                      <p className="text-[10px] text-brand-400">
+                        Kode unik: {qrisKodeUnik} · Harga: {formatRupiah(savedOrder?.final_amount || 0)} + {qrisKodeUnik}
+                      </p>
+                    </div>
+                  )}
+                  {/* Success overlay */}
+                  {qrisStatus === 'success' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-50/95 rounded-2xl z-10 animate-fade-in">
+                      <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center animate-bounce-in mb-3 shadow-lg">
+                        <CheckCircle2 className="w-10 h-10 text-white" />
+                      </div>
+                      <p className="text-lg font-black text-emerald-700 animate-fade-in-up">
+                        Pembayaran Berhasil!
+                      </p>
+                      <p className="text-sm font-bold text-emerald-600 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+                        {formatRupiah((savedOrder?.final_amount || 0) + qrisKodeUnik)}
+                      </p>
+                      <p className="text-xs text-emerald-500 mt-1 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+                        via QRIS
+                      </p>
+                      {/* Confetti */}
+                      <div className="confetti-container">
+                        {['🎉', '✨', '🪄', '💚', '🌟'].map((e, i) => (
+                          <span
+                            key={i}
+                            className="confetti-piece"
+                            style={{
+                              left: `${20 + i * 15}%`,
+                              animationDelay: `${i * 100}ms`,
+                            }}
+                          >
+                            {e}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : /* Jumlah Dibayar — Tunai / Transfer */ (
               <div className="space-y-3 pb-3">
@@ -1351,12 +1497,18 @@ export default function NewOrderPage() {
 
             {/* Bottom buttons */}
             <div className="flex gap-3 px-5 py-4 shrink-0 border-t border-brand-100 bg-white">
-              <button onClick={() => { setShowPayment(false); setSavedOrder(null); setSavedItems([]); }}
+              <button onClick={() => { setShowPayment(false); setSavedOrder(null); setSavedItems([]); setQrisStatus('idle'); }}
                 className="btn-secondary flex-1"
+                disabled={qrisStatus === 'success'}
               >Batal</button>
-              <button onClick={handlePaymentSubmit} className="btn-primary flex-1">
-                <CheckCircle2 className="w-4 h-4" />
-                {paymentMethod === "qris" ? "Sudah Dibayar" : "Konfirmasi"}
+              <button onClick={handlePaymentSubmit} className="btn-primary flex-1" disabled={qrisStatus === 'success'}>
+                {qrisStatus === 'success' ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Mengalihkan...</>
+                ) : paymentMethod === "qris" ? (
+                  <><CheckCircle2 className="w-4 h-4" /> Sudah Dibayar</>
+                ) : (
+                  <><CheckCircle2 className="w-4 h-4" /> Konfirmasi</>
+                )}
               </button>
             </div>
           </div>
