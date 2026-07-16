@@ -143,6 +143,10 @@ export default function NewOrderPage() {
           setShowPayment(false);
           setShowReceipt(true);
           tryAutoPrint();
+          // Update statistik pelanggan
+          if (data?.paid_amount && savedOrder?.customer_id) {
+            updateCustomerStats(savedOrder.customer_id, data.paid_amount);
+          }
         }, 1800);
       }
     }, 5000);
@@ -374,19 +378,35 @@ export default function NewOrderPage() {
     try {
       let customerId = selectedCustomer?.id || null;
       let customerName = selectedCustomer?.name || null;
+
+      // Auto-create/assign customer: cek duplikat nama dulu
       if (newCustomer.name.trim()) {
-        const { data: newCust, error: custError } = await supabase
+        const name = newCustomer.name.trim();
+        const phone = newCustomer.phone.trim();
+        // Cari existing by name
+        const { data: existing } = await supabase
           .from("customers")
-          .insert({
-            name: newCustomer.name.trim(),
-            phone: newCustomer.phone.trim() || null,
-            email: newCustomer.email.trim() || null,
-          })
-          .select()
-          .single();
-        if (custError) throw custError;
-        customerId = newCust.id;
-        customerName = newCust.name;
+          .select("id, name")
+          .eq("name", name)
+          .maybeSingle();
+
+        if (existing) {
+          customerId = existing.id;
+          customerName = existing.name;
+        } else {
+          const { data: newCust, error: custError } = await supabase
+            .from("customers")
+            .insert({
+              name,
+              phone: phone || "000000000000",
+              email: newCustomer.email.trim() || null,
+            })
+            .select()
+            .single();
+          if (custError) throw custError;
+          customerId = newCust.id;
+          customerName = newCust.name;
+        }
       }
 
       const { data: order, error: orderError } = await supabase
@@ -471,6 +491,11 @@ export default function NewOrderPage() {
         setShowPayment(false);
         setShowReceipt(true);
         setTimeout(() => tryAutoPrint(), 500);
+
+        // Update statistik pelanggan
+        if (savedOrder.customer_id) {
+          updateCustomerStats(savedOrder.customer_id, savedOrder.final_amount + qrisKodeUnik);
+        }
       } catch (err: any) {
         toast.error(err.message || "Gagal menyimpan pembayaran");
       }
@@ -518,8 +543,34 @@ export default function NewOrderPage() {
       setShowPayment(false);
       setShowReceipt(true);
       setTimeout(() => tryAutoPrint(), 500);
+
+      // Update statistik pelanggan
+      if (savedOrder.customer_id) {
+        updateCustomerStats(savedOrder.customer_id, paymentAmount);
+      }
     } catch (err: any) {
       toast.error(err.message || "Gagal menyimpan pembayaran");
+    }
+  }
+
+  // ── Update customer stats after payment ──
+  async function updateCustomerStats(customerId: string, paid: number) {
+    try {
+      const { data: cust } = await supabase
+        .from("customers")
+        .select("total_orders, total_spent")
+        .eq("id", customerId)
+        .single();
+      await supabase
+        .from("customers")
+        .update({
+          total_orders: (cust?.total_orders || 0) + 1,
+          total_spent: (cust?.total_spent || 0) + paid,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", customerId);
+    } catch {
+      // Silent — gak ngeblock flow utama
     }
   }
 
