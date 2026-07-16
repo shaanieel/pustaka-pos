@@ -10,6 +10,7 @@ import {
   Plus,
   Clock,
   Shield,
+  Printer,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -19,6 +20,7 @@ const navItems = [
   // Center: floating add button (not in the map, rendered separately)
   { href: "/orders", label: "Pesanan", icon: Clock },
   { href: "/accounts", label: "Data Akun", icon: Shield },
+  { href: "/settings/printer", label: "Printer", icon: Printer },
   { href: "/customers", label: "Pelanggan", icon: Users },
 ];
 

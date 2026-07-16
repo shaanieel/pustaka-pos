@@ -10,6 +10,8 @@ import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
 import { formatRupiah } from "@/lib/utils";
 import { QRCodeCanvas } from "qrcode.react";
+import { printReceipt, getAutoPrint, reconnectPrinter, isConnected } from "@/lib/bluetooth-printer";
+import type { ReceiptData } from "@/lib/bluetooth-printer";
 import {
   ArrowLeft,
   ShoppingCart,
@@ -140,6 +142,7 @@ export default function NewOrderPage() {
         setTimeout(() => {
           setShowPayment(false);
           setShowReceipt(true);
+          tryAutoPrint();
         }, 1800);
       }
     }, 5000);
@@ -467,6 +470,7 @@ export default function NewOrderPage() {
         });
         setShowPayment(false);
         setShowReceipt(true);
+        setTimeout(() => tryAutoPrint(), 500);
       } catch (err: any) {
         toast.error(err.message || "Gagal menyimpan pembayaran");
       }
@@ -513,6 +517,7 @@ export default function NewOrderPage() {
 
       setShowPayment(false);
       setShowReceipt(true);
+      setTimeout(() => tryAutoPrint(), 500);
     } catch (err: any) {
       toast.error(err.message || "Gagal menyimpan pembayaran");
     }
@@ -535,6 +540,56 @@ export default function NewOrderPage() {
     setCustomerSearch("");
   }
 
+  // ── Bluetooth Print ──
+  function buildReceiptData() {
+    if (!savedOrder) return null;
+    const paid = savedOrder.paid_amount ?? (paymentAmount > 0 ? paymentAmount : savedOrder.final_amount);
+    const change = Math.max(0, paid - savedOrder.final_amount);
+    return {
+      orderId: savedOrder.id,
+      createdAt: savedOrder.created_at,
+      customerName: selectedCustomer?.name || newCustomer.name || "Pelanggan Umum",
+      paymentMethod: paymentMethod,
+      paymentStatus: savedOrder.payment_status || "lunas",
+      totalAmount: savedOrder.total_amount,
+      discount: savedOrder.discount,
+      finalAmount: savedOrder.final_amount,
+      paidAmount: paid,
+      changeAmount: change,
+      items: savedItems.map((i) => ({
+        name: i.book_title,
+        qty: i.quantity,
+        price: i.price_at_time,
+        subtotal: i.subtotal,
+      })),
+    };
+  }
+
+  async function handleBluetoothPrint() {
+    const data = buildReceiptData();
+    if (!data) return;
+    try {
+      if (!isConnected()) await reconnectPrinter();
+      await printReceipt(data);
+      toast.success("Struk terkirim ke printer");
+    } catch (e: any) {
+      toast.error(e.message || "Gagal cetak via Bluetooth");
+    }
+  }
+
+  // Auto-print helper
+  async function tryAutoPrint() {
+    if (!getAutoPrint()) return;
+    try {
+      const data = buildReceiptData();
+      if (!data) return;
+      if (!isConnected()) await reconnectPrinter();
+      await printReceipt(data);
+    } catch {
+      // Silent — auto-print gagal, user masih bisa cetak manual
+    }
+  }
+
   // Receipt screen
   if (showReceipt && savedOrder && savedItems.length > 0) {
     return (
@@ -545,6 +600,7 @@ export default function NewOrderPage() {
         paymentAmount={paymentAmount}
         changeAmount={changeAmount}
         onClose={handleCloseReceipt}
+        onBluetoothPrint={handleBluetoothPrint}
         paymentMethod={paymentMethod}
       />
     );

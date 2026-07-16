@@ -6,7 +6,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { Order, OrderItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
-import { Printer, FileImage, FileText, X } from "lucide-react";
+import { Printer, Bluetooth, FileImage, FileText, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface ReceiptProps {
@@ -16,6 +16,7 @@ interface ReceiptProps {
   paymentAmount: number;
   changeAmount: number;
   onClose: () => void;
+  onBluetoothPrint?: () => void;
   cashierName?: string;
   paymentMethod?: string;
 }
@@ -81,6 +82,7 @@ export function Receipt({
   paymentAmount,
   changeAmount,
   onClose,
+  onBluetoothPrint,
   cashierName = "Admin",
   paymentMethod = "Tunai",
 }: ReceiptProps) {
@@ -411,6 +413,9 @@ export function Receipt({
           <div className="flex gap-3">
             <button onClick={onClose} className="btn-secondary flex-1">Tutup</button>
             <button onClick={handlePrint} className="btn-primary flex-1"><Printer className="w-4 h-4" /> Cetak</button>
+            {onBluetoothPrint && (
+              <button onClick={onBluetoothPrint} className="btn-primary flex-1 bg-sky-600 hover:bg-sky-700"><Bluetooth className="w-4 h-4" /> BT</button>
+            )}
           </div>
         </div>
       </div>

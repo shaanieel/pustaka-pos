@@ -12,6 +12,7 @@ import {
   PackageOpen,
   ImageIcon,
   Shield,
+  Printer,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/customers", label: "Pelanggan", icon: Users },
   { href: "/accounts", label: "Data Akun", icon: Shield },
   { href: "/gallery", label: "Galeri", icon: ImageIcon },
+  { href: "/settings/printer", label: "Printer", icon: Printer },
 ];
 
 export function Sidebar() {
