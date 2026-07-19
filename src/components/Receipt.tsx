@@ -134,50 +134,17 @@ export function Receipt({
     }
   }, [order, customerName]);
 
-  // ─── Cetak ke Thermal / Fallback Browser ───────
+  // ─── Cetak ke Thermal ────────────────────────────
   const handlePrint = useCallback(async () => {
-    if (!receiptRef.current) return;
-
-    // Coba thermal printer dulu
-    if (onBluetoothPrint) {
-      try {
-        const { isConnected, reconnectPrinter } = await import("@/lib/bluetooth-printer");
-        if (isConnected()) {
-          await onBluetoothPrint();
-          return;
-        }
-        // Coba reconnect
-        try {
-          await reconnectPrinter();
-          await onBluetoothPrint();
-          return;
-        } catch {
-          // Gagal reconnect, fallback browser print
-          toast("🔵 Printer Bluetooth tidak terhubung. Cetak via browser.", { duration: 3000 });
-        }
-      } catch {
-        // Thermal printer gak available
-      }
+    if (!onBluetoothPrint) {
+      toast.error("Fitur cetak thermal tidak tersedia di halaman ini.");
+      return;
     }
-
-    // Fallback: browser print
     try {
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) return;
-      printWindow.document.write(`
-        <!DOCTYPE html><html><head><title>Cetak Struk — ${STORE.name}</title>
-        <style>@page{margin:0}*{margin:0;padding:0}body{display:flex;justify-content:center;background:#fff}img{max-width:100%;height:auto;display:block}</style>
-        </head><body><img src="${imgData}" alt="Struk" /></body></html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 500);
-    } catch {
-      toast.error("Gagal mencetak");
+      await onBluetoothPrint();
+      toast.success("Struk terkirim ke printer! ✅");
+    } catch (e: any) {
+      toast.error("Cetak gagal: " + (e.message || "Printer tidak terhubung. Cek di Settings → Printer."));
     }
   }, [onBluetoothPrint]);
 
