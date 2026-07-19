@@ -9,6 +9,8 @@ import { formatRupiah } from "@/lib/utils";
 import { Printer, FileImage, FileText, X } from "lucide-react";
 import toast from "react-hot-toast";
 import qz from "@/lib/qz-tray";
+import type { ReceiptData } from "@/lib/bluetooth-printer";
+import { loadImageToRaster } from "@/lib/bluetooth-printer";
 import ThermalPreview from "./ThermalPreview";
 
 interface ReceiptProps {
@@ -139,38 +141,48 @@ export function Receipt({
 
   // ─── Cetak ke Thermal ────────────────────────────
   const handlePrint = useCallback(async () => {
-    // 1) Coba QZ Tray (desktop app — lebih reliable)
+    // Build shared receipt data (same format for both QZ & BT)
+    const paid = order.paid_amount ?? (paymentAmount > 0 ? paymentAmount : order.final_amount);
+    const chg = paid > order.final_amount ? paid - order.final_amount : 0;
+    const data: ReceiptData = {
+      orderId: String(order.id),
+      createdAt: order.created_at,
+      customerName: customerName || "Umum",
+      paymentMethod,
+      paymentStatus: order.payment_status || (paid >= order.final_amount ? "lunas" : "belum_bayar"),
+      totalAmount: order.total_amount || 0,
+      discount: order.discount || 0,
+      finalAmount: order.final_amount,
+      paidAmount: paid,
+      changeAmount: chg,
+      items: items.map((i) => ({
+        name: i.book_title,
+        qty: i.quantity,
+        price: i.price_at_time,
+        subtotal: i.subtotal,
+      })),
+      qrData: "https://bunayyaputra.com",
+    };
+
+    // Load logo for thermal
+    try {
+      const logo = await loadImageToRaster("/logo-green-hue.png", 180);
+      if (logo) data.logoRaster = logo;
+    } catch {}
+
+    // 1) QZ Tray
     try {
       await qz.connect();
-      const data: Parameters<typeof qz.printReceipt>[0] = {
-        customerName,
-        kasir: cashierName,
-        noStruk: String(order.id).slice(-8).toUpperCase(),
-        date: new Date(order.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }),
-        time: new Date(order.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        paymentMethod,
-        totalAmount: order.total_amount || 0,
-        discount: order.discount || 0,
-        finalAmount: order.final_amount,
-        paidAmount,
-        changeAmount,
-        items: items.map((i) => ({
-          name: i.book_title,
-          qty: i.quantity,
-          price: i.price_at_time,
-          subtotal: i.subtotal,
-        })),
-      };
       await qz.printReceipt(data);
       toast.success("Struk terkirim! ✅");
       return;
     } catch {
-      // QZ Tray gak jalan — fallback Bluetooth
+      // QZ Tray gagal — fallback Bluetooth
     }
 
-    // 2) Fallback: Web Bluetooth
+    // 2) Bluetooth
     if (!onBluetoothPrint) {
-      toast.error("Cetak gagal: QZ Tray gak jalan & Bluetooth gak tersedia. Install QZ Tray dari Settings.");
+      toast.error("Cetak gagal: QZ Tray & Bluetooth gak tersedia. Install QZ Tray dari Settings.");
       return;
     }
     try {
@@ -179,7 +191,7 @@ export function Receipt({
     } catch (e: any) {
       toast.error("Cetak gagal: " + (e.message || "Printer tidak terhubung. Cek di Settings → Printer."));
     }
-  }, [onBluetoothPrint, order, items, customerName, paymentMethod, paymentAmount, changeAmount, cashierName]);
+  }, [onBluetoothPrint, order, items, customerName, paymentMethod, paymentAmount, cashierName]);
 
   const paidAmount = order.paid_amount ?? (paymentAmount > 0 ? paymentAmount : order.final_amount);
   const change = paidAmount > order.final_amount ? paidAmount - order.final_amount : 0;

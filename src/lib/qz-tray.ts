@@ -15,6 +15,10 @@ let _scriptLoaded = false;
 let _connected = false;
 let _qz: any = null;
 
+// ─── Import shared receipt builder — same format as Web Bluetooth path ──
+import type { ReceiptData } from "./bluetooth-printer";
+import { buildReceiptBytes } from "./bluetooth-printer";
+
 // ─── Load QZ script ─────────────────────────────────
 function loadScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -141,95 +145,14 @@ const qz = {
     await this.printRaw(printer, full);
   },
 
-  /** Print full receipt from ReceiptData */
+  /** Print full receipt from ReceiptData — uses buildReceiptBytes for consistent output */
   async printReceipt(
-    data: {
-      customerName: string;
-      kasir: string;
-      noStruk: string;
-      date: string;
-      time: string;
-      paymentMethod: string;
-      totalAmount: number;
-      discount: number;
-      finalAmount: number;
-      paidAmount: number;
-      changeAmount: number;
-      items: { name: string; qty: number; price: number; subtotal: number }[];
-    },
+    data: ReceiptData,
     printerName?: string
   ): Promise<void> {
     const printer = printerName || (await this.findPrinter());
-    const enc = new TextEncoder();
-    const chunks: Uint8Array[] = [];
-
-    const add = (...parts: (string | Uint8Array)[]) => {
-      for (const p of parts) {
-        if (typeof p === "string") chunks.push(enc.encode(p));
-        else chunks.push(p);
-      }
-    };
-
-    add(
-      new Uint8Array([CMD_INIT, 0x40]),          // Init printer
-      new Uint8Array([0x1b, 0x61, 0x01]),        // Center align
-      new Uint8Array([0x1d, 0x21, 0x11]),        // Double height + width
-      "BUNAYYA PUTRA\n",
-      new Uint8Array([0x1d, 0x21, 0x00]),        // Normal
-      "Grosir Al-Qur'an dan Buku-Buku Islam\n\n",
-      new Uint8Array([0x1b, 0x61, 0x00]),        // Left align
-      "JL. CEMPAKA NO. 91 A/91 B, PEKANBARU — RIAU\n",
-      "Telp: 0812-7012-9971\n\n",
-      "================================\n",
-      "No. Struk: #" + data.noStruk + "\n",
-      "Tanggal: " + data.date + "\n",
-      "Waktu: " + data.time + "\n",
-      "Pelanggan: " + (data.customerName || "-") + "\n",
-      "Kasir: " + data.kasir + "\n",
-      "Metode Bayar: " + data.paymentMethod + "\n",
-      "================================\n",
-      new Uint8Array([0x1b, 0x61, 0x01]),        // Center
-      "ITEM\n",
-      new Uint8Array([0x1b, 0x61, 0x00]),        // Left
-      "--------------------------------\n",
-    );
-
-    for (const item of data.items) {
-      add(`${item.name}\n`);
-      add(`  ${item.qty} x ${item.price.toLocaleString("id-ID")}  ........  ${item.subtotal.toLocaleString("id-ID")}\n`);
-    }
-
-    add(
-      "--------------------------------\n",
-      "Subtotal:           Rp " + data.totalAmount.toLocaleString("id-ID") + "\n",
-      "Diskon:             Rp " + data.discount.toLocaleString("id-ID") + "\n",
-      new Uint8Array([0x1b, 0x61, 0x01]),        // Center
-      new Uint8Array([0x1d, 0x21, 0x11]),        // Double size
-      "TOTAL: Rp " + data.finalAmount.toLocaleString("id-ID") + "\n",
-      new Uint8Array([0x1d, 0x21, 0x00]),        // Normal
-      new Uint8Array([0x1b, 0x61, 0x00]),        // Left
-      "================================\n",
-      "Status: " + (data.paidAmount >= data.finalAmount ? "LUNAS" : "BELUM LUNAS") + " (" + data.paymentMethod + ")\n",
-      "Dibayar:            Rp " + data.paidAmount.toLocaleString("id-ID") + "\n",
-      "Kembalian:          Rp " + data.changeAmount.toLocaleString("id-ID") + "\n\n",
-      new Uint8Array([0x1b, 0x61, 0x01]),        // Center
-      "Terima kasih\n",
-      "Telah berbelanja di BUNAYYA PUTRA\n",
-      "Semoga bermanfaat\n\n",
-      "bunayyaputra.com\n",
-      "@bunayyaputra\n",
-      "Pekanbaru\n\n\n",
-      new Uint8Array([CMD_CUT, 0x56, 0x01]),     // Partial cut
-    );
-
-    // Calc total length
-    let totalLen = 0;
-    for (const c of chunks) totalLen += c.length;
-    const full = new Uint8Array(totalLen);
-    let off = 0;
-    for (const c of chunks) { full.set(c, off); off += c.length; }
-
-    await this.printRaw(printer, full);
+    const raw = buildReceiptBytes(data);
+    await this.printRaw(printer, raw);
   },
 };
 
