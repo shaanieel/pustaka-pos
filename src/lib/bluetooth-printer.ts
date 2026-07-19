@@ -630,6 +630,8 @@ export interface ReceiptData {
   }[];
   /** Optional QR code data (e.g. website URL) */
   qrData?: string;
+  /** Optional logo raster bitmap for thermal print (GS v 0) */
+  logoRaster?: { width: number; height: number; bytes: Uint8Array };
 }
 
 function statusLabel(s: string): string {
@@ -645,6 +647,13 @@ function statusLabel(s: string): string {
 export function buildReceiptBytes(data: ReceiptData): Uint8Array {
   const enc = new TextEncoder();
   const parts: Uint8Array[] = [INIT, CENTER];
+
+  // ── Logo bitmap (GS v 0, optional) ──
+  if (data.logoRaster) {
+    const rasterParts = buildRasterImage(data.logoRaster.width, data.logoRaster.height, data.logoRaster.bytes);
+    for (const p of rasterParts) parts.push(p);
+    parts.push(LF);
+  }
 
   // ── Header ──
   parts.push(DB_SIZE);
