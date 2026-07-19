@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { toPng, toJpeg } from "html-to-image";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
@@ -9,6 +9,7 @@ import { formatRupiah } from "@/lib/utils";
 import { Printer, FileImage, FileText, X } from "lucide-react";
 import toast from "react-hot-toast";
 import qz from "@/lib/qz-tray";
+import ThermalPreview from "./ThermalPreview";
 
 interface ReceiptProps {
   order: Order;
@@ -88,6 +89,7 @@ export function Receipt({
   paymentMethod = "Tunai",
 }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
+  const [showThermalPreview, setShowThermalPreview] = useState(false);
 
   // ─── Download JPG / PNG ─────────────────────────────────
   const downloadImage = useCallback(
@@ -215,6 +217,7 @@ export function Receipt({
   const fileNameBase = `bunayya putra-${safeName}-${datePart}`;
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-scale-in">
       <div className="bg-white rounded-3xl shadow-float w-full max-w-md max-h-[93vh] overflow-hidden flex flex-col">
         <div className="flex-1 overflow-y-auto overscroll-contain">
@@ -434,10 +437,27 @@ export function Receipt({
           </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="btn-secondary flex-1">Tutup</button>
-            <button onClick={handlePrint} className="btn-primary flex-1 items-center gap-1.5"><Printer className="w-4 h-4" /> Cetak Thermal</button>
+            <button onClick={() => setShowThermalPreview(true)} className="btn-primary flex-1 items-center gap-1.5"><Printer className="w-4 h-4" /> Cetak Thermal</button>
           </div>
         </div>
       </div>
     </div>
+    {showThermalPreview && (
+      <ThermalPreview
+        order={order}
+        items={items}
+        customerName={customerName}
+        paymentAmount={paymentAmount}
+        paymentMethod={paymentMethod}
+        paymentStatus={payStatus}
+        cashierName={cashierName}
+        onPrint={async () => {
+          setShowThermalPreview(false);
+          await handlePrint();
+        }}
+        onClose={() => setShowThermalPreview(false)}
+      />
+    )}
+  </>
   );
 }

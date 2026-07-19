@@ -709,15 +709,13 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
   }
   parts.push(textLine(DIVIDER));
 
-  // ── QR Code (optional) ──
+  // ── QR Code ──
   if (data.qrData) {
     parts.push(LF);
     parts.push(CENTER);
     parts.push(enc.encode("Scan untuk website kami\n"));
     const qrParts = buildQRCodeBytes(data.qrData);
-    for (const p of qrParts) {
-      parts.push(p);
-    }
+    for (const p of qrParts) parts.push(p);
   }
 
   // ── Footer ──
@@ -732,19 +730,13 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
   parts.push(textLine(EQUALS));
 
   // ── Spasi + Potong ──
-  parts.push(LF);
-  parts.push(LF);
-  parts.push(LF);
+  parts.push(LF); parts.push(LF); parts.push(LF);
   parts.push(CUT);
 
-  // Gabung
   const totalLen = parts.reduce((sum, p) => sum + p.byteLength, 0);
   const result = new Uint8Array(totalLen);
   let offset = 0;
-  for (const p of parts) {
-    result.set(p, offset);
-    offset += p.byteLength;
-  }
+  for (const p of parts) { result.set(p, offset); offset += p.byteLength; }
   return result;
 }
 
@@ -752,56 +744,35 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
 
 export async function printReceipt(data: ReceiptData): Promise<void> {
   log("info", "Print receipt dimulai...");
-
   if (!_characteristic) {
     log("info", "Characteristic kosong, reconnect dulu...");
     await reconnectPrinter();
   }
-  if (!_characteristic) {
-    throw new Error("Printer tidak terhubung.");
-  }
+  if (!_characteristic) throw new Error("Printer tidak terhubung.");
 
   const bytes = buildReceiptBytes(data);
   log("info", `Total data: ${bytes.length} bytes`);
 
-  // Cek characteristic properties
   const props = _characteristic.properties;
   const canWrite = props.write;
   const canWriteNoResp = props.writeWithoutResponse;
+  if (!canWrite && !canWriteNoResp) throw new Error("Characteristic tidak memiliki properti write.");
 
-  log("info", `Properties: write=${canWrite}, writeWithoutResponse=${canWriteNoResp}`);
-
-  if (!canWrite && !canWriteNoResp) {
-    throw new Error("Characteristic tidak memiliki properti write.");
-  }
-
-  // Kirim per chunk + delay antar chunk (biar buffer printer ga overflow)
-  const CHUNK = 20; // BLE MTU max ~20 byte per write
-  const DELAY_MS = 50; // delay antar chunk biar printer ga kewalahan
-
+  const CHUNK = 20;
+  const DELAY_MS = 50;
   let sentBytes = 0;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     const chunk = bytes.slice(i, i + CHUNK);
-
     try {
-      if (canWriteNoResp) {
-        // writeWithoutResponse lebih cepet (ga nunggu ack)
-        await _characteristic.writeValueWithoutResponse(chunk);
-      } else {
-        await _characteristic.writeValue(chunk);
-      }
+      if (canWriteNoResp) await _characteristic.writeValueWithoutResponse(chunk);
+      else await _characteristic.writeValue(chunk);
       sentBytes += chunk.byteLength;
-
-      // Delay antar chunk biar printer punya waktu proses
-      if (i + CHUNK < bytes.length) {
-        await new Promise((r) => setTimeout(r, DELAY_MS));
-      }
+      if (i + CHUNK < bytes.length) await new Promise((r) => setTimeout(r, DELAY_MS));
     } catch (e: any) {
       log("error", `Write gagal di byte ${i}: ${e.message}`);
       throw new Error(`Gagal kirim data ke printer di byte ${i}: ${e.message}`);
     }
   }
-
   log("info", `Print berhasil: ${sentBytes}/${bytes.length} bytes terkirim`);
 }
 
@@ -818,47 +789,26 @@ export function buildSimpleTestBytes(): Uint8Array {
   const totalLen = parts.reduce((sum, p) => sum + p.byteLength, 0);
   const result = new Uint8Array(totalLen);
   let offset = 0;
-  for (const p of parts) {
-    result.set(p, offset);
-    offset += p.byteLength;
-  }
+  for (const p of parts) { result.set(p, offset); offset += p.byteLength; }
   return result;
 }
 
-/** Test print — cetak 1 baris aja biar ga boros kertas */
+/** Test print */
 export async function testPrint(): Promise<void> {
   log("info", "Test print dimulai...");
-
-  if (!_characteristic) {
-    await reconnectPrinter();
-  }
-  if (!_characteristic) {
-    throw new Error("Printer tidak terhubung.");
-  }
-
+  if (!_characteristic) await reconnectPrinter();
+  if (!_characteristic) throw new Error("Printer tidak terhubung.");
   const bytes = buildSimpleTestBytes();
-  log("info", `Test data: ${bytes.length} bytes`);
-
   const props = _characteristic.properties;
   const canWriteNoResp = props.writeWithoutResponse;
-  const CHUNK = 20;
-  const DELAY_MS = 50;
-
+  const CHUNK = 20; const DELAY_MS = 50;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     const chunk = bytes.slice(i, i + CHUNK);
     try {
-      if (canWriteNoResp) {
-        await _characteristic.writeValueWithoutResponse(chunk);
-      } else {
-        await _characteristic.writeValue(chunk);
-      }
-      if (i + CHUNK < bytes.length) {
-        await new Promise((r) => setTimeout(r, DELAY_MS));
-      }
-    } catch (e: any) {
-      throw new Error(`Gagal kirim test: ${e.message}`);
-    }
+      if (canWriteNoResp) await _characteristic.writeValueWithoutResponse(chunk);
+      else await _characteristic.writeValue(chunk);
+      if (i + CHUNK < bytes.length) await new Promise((r) => setTimeout(r, DELAY_MS));
+    } catch (e: any) { throw new Error(`Gagal kirim test: ${e.message}`); }
   }
-
   log("info", "Test print berhasil!");
 }

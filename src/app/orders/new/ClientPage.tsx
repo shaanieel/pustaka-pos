@@ -10,7 +10,7 @@ import { Receipt } from "@/components/Receipt";
 import { ScannerButton } from "@/components/ScannerButton";
 import { formatRupiah } from "@/lib/utils";
 import { QRCodeCanvas } from "qrcode.react";
-import { printReceipt, getAutoPrint, reconnectPrinter, isConnected } from "@/lib/bluetooth-printer";
+import { printReceipt, getAutoPrint, reconnectPrinter, isConnected, loadImageToRaster } from "@/lib/bluetooth-printer";
 import type { ReceiptData } from "@/lib/bluetooth-printer";
 import {
   ArrowLeft,
@@ -613,8 +613,7 @@ export default function NewOrderPage() {
         price: i.price_at_time,
         subtotal: i.subtotal,
       })),
-      // QR code berisi website store
-      qrData: "https://bunayyaputra.com",
+      qrData: `https://bunayyaputra.com`,
     };
   }
 
@@ -622,9 +621,14 @@ export default function NewOrderPage() {
     const data = buildReceiptData();
     if (!data) return;
     try {
+      // Load logo raster for thermal print
+      try {
+        const logo = await loadImageToRaster("/logo-green-hue.png", 180);
+        if (logo) (data as any).logoRaster = logo;
+      } catch {}
       if (!isConnected()) await reconnectPrinter();
       await printReceipt(data);
-      toast.success("Struk terkirim ke printer");
+      toast.success("Struk terkirim ke printer ✅");
     } catch (e: any) {
       toast.error(e.message || "Gagal cetak via Bluetooth");
     }
