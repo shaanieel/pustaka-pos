@@ -436,7 +436,7 @@ const KICK = cmd(0x1b, 0x70, 0x00, 0x19, 0xfa);
 function feed(n: number) { return cmd(0x1b, 0x64, n); }
 
 const MAX_COL = 32;
-const DIVIDER = "─".repeat(MAX_COL);
+const DIVIDER = "-".repeat(MAX_COL);
 const EQUALS = "=".repeat(MAX_COL);
 
 function textLine(t: string): Uint8Array {
@@ -636,10 +636,10 @@ export interface ReceiptData {
 
 function statusLabel(s: string): string {
   switch (s) {
-    case "lunas": return "● LUNAS";
-    case "belum_lunas": return "● BELUM LUNAS";
-    case "belum_bayar": return "● BELUM BAYAR";
-    case "waiting_payment": return "● MENUNGGU PEMBAYARAN";
+    case "lunas": return "LUNAS";
+    case "belum_lunas": return "BELUM LUNAS";
+    case "belum_bayar": return "BELUM BAYAR";
+    case "waiting_payment": return "MENUNGGU PEMBAYARAN";
     default: return s.toUpperCase();
   }
 }
@@ -661,7 +661,7 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
   parts.push(NORMAL);
   parts.push(enc.encode("Grosir Al-Qur'an & Buku Islam\n"));
   parts.push(enc.encode("JL. CEMPAKA NO. 91 A/91 B\n"));
-  parts.push(enc.encode("PEKANBARU — RIAU\n"));
+  parts.push(enc.encode("PEKANBARU - RIAU\n"));
   parts.push(enc.encode("WA: 0812-7012-9971\n"));
   parts.push(textLine(EQUALS));
 
