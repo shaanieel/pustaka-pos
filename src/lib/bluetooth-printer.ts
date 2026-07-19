@@ -308,15 +308,36 @@ export async function reconnectPrinter(): Promise<void> {
     throw new Error("Web Bluetooth tidak didukung browser ini.");
   }
 
-  if (_device?.gatt?.connected) {
-    log("debug", "Printer masih terhubung, skip reconnect");
-    return;
+  // Cek: apakah _device masih ada dan tinggal connect?
+  if (_device) {
+    if (_device.gatt?.connected) {
+      log("debug", "Printer masih terhubung via cache, skip reconnect");
+      return;
+    }
+    // Coba reconnect pake cached device — CEPET karena ga pake getDevices()
+    try {
+      log("info", "Coba reconnect pake cached device...");
+      const server = await _device.gatt!.connect();
+      log("info", "GATT connected via cache");
+      const char = await findPrinterChar(server);
+      if (char) {
+        _characteristic = char;
+        log("info", "Reconnect berhasil via cache");
+        return;
+      }
+      await _device.gatt!.disconnect();
+    } catch (e) {
+      log("warn", "Reconnect via cache gagal, fallback ke getDevices()", e);
+      _device = null;
+      _characteristic = null;
+    }
   }
 
+  // Fallback: cari via getDevices() — SLOW (bisa freeze 5-30 detik!)
   const paired = getPairedPrinter();
   if (!paired) throw new Error("Belum ada printer terdaftar. Pairing dulu.");
 
-  log("info", `Mencari device: ${paired.name} (${paired.id})`);
+  log("warn", `Fallback: getDevices() — cari device: ${paired.name}`);
   const devices = await navigator.bluetooth.getDevices();
   const device = devices.find((d) => d.id === paired.id);
 
@@ -328,7 +349,7 @@ export async function reconnectPrinter(): Promise<void> {
     );
   }
 
-  log("info", `Device ditemukan, connecting...`);
+  log("info", `Device ditemukan via getDevices, connecting...`);
   const server = await device.gatt!.connect();
   log("info", "GATT connected");
 
@@ -343,11 +364,10 @@ export async function reconnectPrinter(): Promise<void> {
 
   device.addEventListener("gattserverdisconnected", () => {
     log("warn", `Printer disconnected: ${device.name}`);
-    // JANGAN null _device — reconnect pake device.gatt.connect() tanpa getDevices()
     _characteristic = null;
   });
 
-  log("info", "Reconnect berhasil");
+  log("info", "Reconnect berhasil via getDevices fallback");
 }
 
 /** Putuskan koneksi */
