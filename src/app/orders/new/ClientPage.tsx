@@ -613,6 +613,8 @@ export default function NewOrderPage() {
         price: i.price_at_time,
         subtotal: i.subtotal,
       })),
+      // QR code berisi website store
+      qrData: "https://bunayyaputra.com",
     };
   }
 

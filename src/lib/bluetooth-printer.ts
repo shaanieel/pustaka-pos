@@ -406,9 +406,6 @@ export async function listPairedDevices(): Promise<PairedPrinter[]> {
 
 // ─── ESC/POS 58mm ──────────────────────────────
 
-const ESC = "\x1b";
-const GS = "\x1d";
-
 function cmd(...args: number[]) {
   return new Uint8Array(args);
 }
@@ -481,6 +478,137 @@ function fmt(n: number): string {
   return "Rp" + n.toLocaleString("id-ID");
 }
 
+// ─── ESC/POS QR Code ───────────────────────────
+// Menggunakan GS ( k (2D bar code) command set — standar ESC/POS
+
+/** Set QR code module size (dots, 1-16, default 3) */
+function qrSetModuleSize(n: number): Uint8Array {
+  return cmd(0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, n);
+}
+
+/** Set QR code error correction level: 48(L) 49(M) 50(Q) 51(H) */
+function qrSetErrorCorrection(level: number): Uint8Array {
+  return cmd(0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, level);
+}
+
+/** Store QR code data into printer buffer */
+function qrStoreData(data: string): Uint8Array {
+  const enc = new TextEncoder();
+  const raw = enc.encode(data);
+  const paramLen = raw.length + 3; // cn(1) + fn(1) + n(1) + data
+  const pL = paramLen & 0xff;
+  const pH = (paramLen >> 8) & 0xff;
+  const header = cmd(0x1d, 0x28, 0x6b, pL, pH, 0x31, 0x50, 0x30);
+  const result = new Uint8Array(header.length + raw.length);
+  result.set(header, 0);
+  result.set(raw, header.length);
+  return result;
+}
+
+/** Print QR code from printer buffer */
+function qrPrint(m: number = 0): Uint8Array {
+  return cmd(0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, m);
+}
+
+/** Build full QR code ESC/POS command set */
+export function buildQRCodeBytes(data: string): Uint8Array[] {
+  return [
+    qrSetModuleSize(4),      // module size 4 (good for 58mm)
+    qrSetErrorCorrection(49), // M level (7%)
+    qrStoreData(data),
+    qrPrint(0),
+    LF,
+  ];
+}
+
+// ─── ESC/POS Raster Bit Image (GS v 0) ────────
+
+/** Build GS v 0 raster bit image command from 1-bit pixel data.
+ *  pixelData: monochrome (0=white, 1=black), 1 byte per pixel row-packed.
+ *  widthPx: original width in pixels (must be ≤ 384 for 58mm).
+ *  heightPx: height in rows.
+ */
+export function buildRasterImage(widthPx: number, heightPx: number, pixelData: Uint8Array): Uint8Array[] {
+  // GS v 0 m xL xH yL yH d1...dk
+  // m=0 (normal), x = width in bytes (rounded up), y = height in dots
+  const xBytes = Math.ceil(widthPx / 8);
+  const xL = xBytes & 0xff;
+  const xH = (xBytes >> 8) & 0xff;
+  const yL = heightPx & 0xff;
+  const yH = (heightPx >> 8) & 0xff;
+
+  const header = cmd(0x1d, 0x76, 0x30, 0x00, xL, xH, yL, yH);
+  return [header, pixelData];
+}
+
+/** Convert canvas ImageData to 1-bit packed ESC/POS raster data.
+ *  threshold: brightness threshold 0-255 (default 128, lower = more black)
+ *  Returns { width, height, bytes } suitable for buildRasterImage
+ */
+export function imageDataToRaster(
+  imgData: ImageData,
+  threshold: number = 128
+): { width: number; height: number; bytes: Uint8Array } {
+  const w = imgData.width;
+  const h = imgData.height;
+  const xBytes = Math.ceil(w / 8);
+  const bytes = new Uint8Array(xBytes * h);
+
+  for (let row = 0; row < h; row++) {
+    for (let col = 0; col < w; col++) {
+      const px = (row * w + col) * 4;
+      const r = imgData.data[px];
+      const g = imgData.data[px + 1];
+      const b = imgData.data[px + 2];
+      // Luminance formula (perceptual)
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const black = lum < threshold; // true = dot on (black)
+
+      if (black) {
+        const byteIdx = row * xBytes + Math.floor(col / 8);
+        const bitIdx = 7 - (col % 8); // MSB = leftmost pixel
+        bytes[byteIdx] |= (1 << bitIdx);
+      }
+    }
+  }
+
+  return { width: w, height: h, bytes };
+}
+
+/** Load an image from URL, render to canvas, convert to ESC/POS raster.
+ *  Returns null on any error (network, CORS, decode).
+ */
+export function loadImageToRaster(
+  imageUrl: string,
+  maxWidth: number = 200
+): Promise<{ width: number; height: number; bytes: Uint8Array } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxWidth / img.width);
+        const width = Math.round(img.width * scale);
+        const height = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        resolve(imageDataToRaster(imageData));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = imageUrl;
+  });
+}
+
 // ─── Build Receipt ─────────────────────────────
 
 export interface ReceiptData {
@@ -500,6 +628,8 @@ export interface ReceiptData {
     price: number;
     subtotal: number;
   }[];
+  /** Optional QR code data (e.g. website URL) */
+  qrData?: string;
 }
 
 function statusLabel(s: string): string {
@@ -578,6 +708,17 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
     parts.push(enc.encode("Kembali  : " + fmt(data.changeAmount) + "\n"));
   }
   parts.push(textLine(DIVIDER));
+
+  // ── QR Code (optional) ──
+  if (data.qrData) {
+    parts.push(LF);
+    parts.push(CENTER);
+    parts.push(enc.encode("Scan untuk website kami\n"));
+    const qrParts = buildQRCodeBytes(data.qrData);
+    for (const p of qrParts) {
+      parts.push(p);
+    }
+  }
 
   // ── Footer ──
   parts.push(CENTER);
