@@ -73,21 +73,9 @@ export default function PrinterSettingsPage() {
     const p = getPairedPrinter();
     setPaired(p);
   }, []);
-
   useEffect(() => {
     refreshStatus();
-    if (getPairedPrinter() && !isConnected()) {
-      setStatus("connecting");
-      reconnectPrinter()
-        .then(() => {
-          setConnected(true);
-          setDeviceName(getConnectedName());
-          setStatus("connected");
-        })
-        .catch(() => {
-          setStatus("idle");
-        });
-    }
+    // Hapus auto-reconnect — biar manual aja, soalnya bikin web lemot
   }, [refreshStatus]);
 
   async function handlePair() {

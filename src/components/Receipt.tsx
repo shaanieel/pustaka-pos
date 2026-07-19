@@ -6,7 +6,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { Order, OrderItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
-import { Printer, Bluetooth, FileImage, FileText, X } from "lucide-react";
+import { Printer, FileImage, FileText, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface ReceiptProps {
@@ -134,9 +134,33 @@ export function Receipt({
     }
   }, [order, customerName]);
 
-  // ─── Cetak ────────────────────────────────────────────
+  // ─── Cetak ke Thermal / Fallback Browser ───────
   const handlePrint = useCallback(async () => {
     if (!receiptRef.current) return;
+
+    // Coba thermal printer dulu
+    if (onBluetoothPrint) {
+      try {
+        const { isConnected, reconnectPrinter } = await import("@/lib/bluetooth-printer");
+        if (isConnected()) {
+          await onBluetoothPrint();
+          return;
+        }
+        // Coba reconnect
+        try {
+          await reconnectPrinter();
+          await onBluetoothPrint();
+          return;
+        } catch {
+          // Gagal reconnect, fallback browser print
+          toast("🔵 Printer Bluetooth tidak terhubung. Cetak via browser.", { duration: 3000 });
+        }
+      } catch {
+        // Thermal printer gak available
+      }
+    }
+
+    // Fallback: browser print
     try {
       const canvas = await html2canvas(receiptRef.current, {
         scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
@@ -155,7 +179,7 @@ export function Receipt({
     } catch {
       toast.error("Gagal mencetak");
     }
-  }, []);
+  }, [onBluetoothPrint]);
 
   const paidAmount = order.paid_amount ?? (paymentAmount > 0 ? paymentAmount : order.final_amount);
   const change = paidAmount > order.final_amount ? paidAmount - order.final_amount : 0;
@@ -412,10 +436,7 @@ export function Receipt({
           </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="btn-secondary flex-1">Tutup</button>
-            <button onClick={handlePrint} className="btn-primary flex-1"><Printer className="w-4 h-4" /> Cetak</button>
-            {onBluetoothPrint && (
-              <button onClick={onBluetoothPrint} className="btn-primary flex-1 bg-sky-600 hover:bg-sky-700"><Bluetooth className="w-4 h-4" /> BT</button>
-            )}
+            <button onClick={handlePrint} className="btn-primary flex-1 items-center gap-1.5"><Printer className="w-4 h-4" /> Cetak Thermal</button>
           </div>
         </div>
       </div>

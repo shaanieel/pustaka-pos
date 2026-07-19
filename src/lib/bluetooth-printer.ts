@@ -644,24 +644,60 @@ export async function printReceipt(data: ReceiptData): Promise<void> {
   log("info", `Print berhasil: ${sentBytes}/${bytes.length} bytes terkirim`);
 }
 
-/** Test print — cetak struk test */
+export function buildSimpleTestBytes(): Uint8Array {
+  const enc = new TextEncoder();
+  const parts: Uint8Array[] = [
+    INIT, CENTER, DB_SIZE,
+    enc.encode("BUNAYYA PUTRA\n"),
+    NORMAL,
+    enc.encode("Test Cetak Thermal\n"),
+    enc.encode(new Date().toLocaleDateString("id-ID") + "\n"),
+    LF, LF, LF, CUT,
+  ];
+  const totalLen = parts.reduce((sum, p) => sum + p.byteLength, 0);
+  const result = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const p of parts) {
+    result.set(p, offset);
+    offset += p.byteLength;
+  }
+  return result;
+}
+
+/** Test print — cetak 1 baris aja biar ga boros kertas */
 export async function testPrint(): Promise<void> {
   log("info", "Test print dimulai...");
-  const testData: ReceiptData = {
-    orderId: "TEST" + Date.now().toString(36).toUpperCase().slice(-4),
-    createdAt: new Date().toISOString(),
-    customerName: "Test Cetak",
-    paymentMethod: "tunai",
-    paymentStatus: "lunas",
-    totalAmount: 50000,
-    discount: 0,
-    finalAmount: 50000,
-    paidAmount: 50000,
-    changeAmount: 0,
-    items: [
-      { name: "Produk Test #1", qty: 1, price: 25000, subtotal: 25000 },
-      { name: "Produk Test #2", qty: 2, price: 12500, subtotal: 25000 },
-    ],
-  };
-  await printReceipt(testData);
+
+  if (!_characteristic) {
+    await reconnectPrinter();
+  }
+  if (!_characteristic) {
+    throw new Error("Printer tidak terhubung.");
+  }
+
+  const bytes = buildSimpleTestBytes();
+  log("info", `Test data: ${bytes.length} bytes`);
+
+  const props = _characteristic.properties;
+  const canWriteNoResp = props.writeWithoutResponse;
+  const CHUNK = 20;
+  const DELAY_MS = 50;
+
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const chunk = bytes.slice(i, i + CHUNK);
+    try {
+      if (canWriteNoResp) {
+        await _characteristic.writeValueWithoutResponse(chunk);
+      } else {
+        await _characteristic.writeValue(chunk);
+      }
+      if (i + CHUNK < bytes.length) {
+        await new Promise((r) => setTimeout(r, DELAY_MS));
+      }
+    } catch (e: any) {
+      throw new Error(`Gagal kirim test: ${e.message}`);
+    }
+  }
+
+  log("info", "Test print berhasil!");
 }
