@@ -292,7 +292,7 @@ export async function pairPrinter(): Promise<PairedPrinter> {
 
   device.addEventListener("gattserverdisconnected", () => {
     log("warn", `Printer disconnected: ${device.name}`);
-    _device = null;
+    // JANGAN null _device — reconnect pake device.gatt.connect() tanpa getDevices()
     _characteristic = null;
   });
 
@@ -343,7 +343,7 @@ export async function reconnectPrinter(): Promise<void> {
 
   device.addEventListener("gattserverdisconnected", () => {
     log("warn", `Printer disconnected: ${device.name}`);
-    _device = null;
+    // JANGAN null _device — reconnect pake device.gatt.connect() tanpa getDevices()
     _characteristic = null;
   });
 
@@ -561,12 +561,12 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
 
   // ── Footer ──
   parts.push(CENTER);
-  parts.push(enc.encode("Terima kasih 🙏\n"));
+  parts.push(enc.encode("Terima kasih :)\n"));
   parts.push(enc.encode("Telah berbelanja di\n"));
   parts.push(BOLD_ON);
   parts.push(enc.encode("Bunayya Putra\n"));
   parts.push(BOLD_OFF);
-  parts.push(enc.encode("Semoga bermanfaat 😊\n"));
+  parts.push(enc.encode("Semoga bermanfaat :)\n"));
   parts.push(enc.encode("bunayyaputra.com\n"));
   parts.push(textLine(EQUALS));
 
