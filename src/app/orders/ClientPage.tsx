@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import { clsx } from "clsx";
 import toast from "react-hot-toast";
+import { printReceipt, reconnectPrinter, isConnected } from "@/lib/bluetooth-printer";
+import type { ReceiptData } from "@/lib/bluetooth-printer";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -148,6 +150,47 @@ export default function OrdersPage() {
       setShowReceipt(true);
     } catch {
       toast.error("Gagal memuat detail pesanan");
+    }
+  }
+
+  function buildReceiptData(): ReceiptData | null {
+    if (!viewingOrder) return null;
+    if (viewingItems.length === 0) return null;
+    // Ensure totals use the saved values
+    const disc = viewingOrder.discount || 0;
+    const total = viewingOrder.total_amount || viewingItems.reduce((sum, i) => sum + (i.subtotal || i.quantity * i.price_at_time), 0);
+    const finalAmt = viewingOrder.final_amount || (total - disc);
+    const paid = viewingOrder.paid_amount ?? finalAmt;
+    const change = paid > finalAmt ? paid - finalAmt : 0;
+    return {
+      orderId: viewingOrder.id,
+      createdAt: viewingOrder.created_at,
+      customerName: viewingOrder.customer_name || "",
+      paymentMethod: viewingOrder.payment_method || "Tunai",
+      paymentStatus: viewingOrder.payment_status || "lunas",
+      totalAmount: total,
+      discount: disc,
+      finalAmount: finalAmt,
+      paidAmount: paid,
+      changeAmount: change,
+      items: viewingItems.map((i) => ({
+        name: i.book_title,
+        qty: i.quantity,
+        price: i.price_at_time,
+        subtotal: i.subtotal,
+      })),
+    };
+  }
+
+  async function handleBluetoothPrint() {
+    const data = buildReceiptData();
+    if (!data) return;
+    try {
+      if (!isConnected()) await reconnectPrinter();
+      await printReceipt(data);
+      toast.success("Struk terkirim ke printer");
+    } catch (e: any) {
+      toast.error(e.message || "Gagal cetak via Bluetooth");
     }
   }
 
@@ -468,6 +511,7 @@ export default function OrdersPage() {
           paymentAmount={viewingOrder.final_amount}
           changeAmount={0}
           paymentMethod={viewingOrder.payment_method || "Tunai"}
+          onBluetoothPrint={handleBluetoothPrint}
           onClose={() => { setShowReceipt(false); setViewingOrder(null); setViewingItems([]); }}
         />
       )}

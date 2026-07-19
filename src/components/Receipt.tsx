@@ -8,6 +8,7 @@ import { Order, OrderItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
 import { Printer, FileImage, FileText, X } from "lucide-react";
 import toast from "react-hot-toast";
+import qz from "@/lib/qz-tray";
 
 interface ReceiptProps {
   order: Order;
@@ -136,17 +137,47 @@ export function Receipt({
 
   // ─── Cetak ke Thermal ────────────────────────────
   const handlePrint = useCallback(async () => {
+    // 1) Coba QZ Tray (desktop app — lebih reliable)
+    try {
+      await qz.connect();
+      const data: Parameters<typeof qz.printReceipt>[0] = {
+        customerName,
+        kasir: cashierName,
+        noStruk: String(order.id).slice(-8).toUpperCase(),
+        date: new Date(order.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }),
+        time: new Date(order.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        paymentMethod,
+        totalAmount: order.total_amount || 0,
+        discount: order.discount || 0,
+        finalAmount: order.final_amount,
+        paidAmount,
+        changeAmount,
+        items: items.map((i) => ({
+          name: i.book_title,
+          qty: i.quantity,
+          price: i.price_at_time,
+          subtotal: i.subtotal,
+        })),
+      };
+      await qz.printReceipt(data);
+      toast.success("Struk terkirim! ✅");
+      return;
+    } catch {
+      // QZ Tray gak jalan — fallback Bluetooth
+    }
+
+    // 2) Fallback: Web Bluetooth
     if (!onBluetoothPrint) {
-      toast.error("Fitur cetak thermal tidak tersedia di halaman ini.");
+      toast.error("Cetak gagal: QZ Tray gak jalan & Bluetooth gak tersedia. Install QZ Tray dari Settings.");
       return;
     }
     try {
       await onBluetoothPrint();
-      toast.success("Struk terkirim ke printer! ✅");
+      toast.success("Struk terkirim via Bluetooth! ✅");
     } catch (e: any) {
       toast.error("Cetak gagal: " + (e.message || "Printer tidak terhubung. Cek di Settings → Printer."));
     }
-  }, [onBluetoothPrint]);
+  }, [onBluetoothPrint, order, items, customerName, paymentMethod, paymentAmount, changeAmount, cashierName]);
 
   const paidAmount = order.paid_amount ?? (paymentAmount > 0 ? paymentAmount : order.final_amount);
   const change = paidAmount > order.final_amount ? paidAmount - order.final_amount : 0;

@@ -36,6 +36,7 @@ import {
   isWebBluetoothSupported,
   getPlatformInfo,
 } from "@/lib/bluetooth-printer";
+import qz from "@/lib/qz-tray";
 
 type Status = "idle" | "connecting" | "connected" | "error";
 
@@ -146,6 +147,39 @@ export default function PrinterSettingsPage() {
     const v = !autoPrint;
     setAutoPrint(v);
     setAutoPrintState(v);
+  }
+
+  // ─── QZ Tray state ─────────────────────────────
+  const [qzRunning, setQzRunning] = useState(false);
+  const [qzPrinters, setQzPrinters] = useState<string[]>([]);
+  const [qzLoading, setQzLoading] = useState(false);
+  const [qzError, setQzError] = useState("");
+
+  async function handleQZConnect() {
+    setQzLoading(true);
+    setQzError("");
+    try {
+      await qz.connect();
+      setQzRunning(true);
+      const printers = await qz.listPrinters();
+      setQzPrinters(printers);
+    } catch (e: any) {
+      setQzRunning(false);
+      setQzPrinters([]);
+      setQzError(e.message || "Gagal connect QZ Tray");
+    } finally {
+      setQzLoading(false);
+    }
+  }
+
+  async function handleQZTestPrint() {
+    setQzError("");
+    try {
+      if (!qz.isConnected()) await qz.connect();
+      await qz.testPrint();
+    } catch (e: any) {
+      setQzError(e.message || "Test print QZ gagal");
+    }
   }
 
   return (
@@ -298,6 +332,64 @@ export default function PrinterSettingsPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ─── QZ Tray ─────────────────────────── */}
+      <div className="card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-brand-800">QZ Tray Desktop</h2>
+            <p className="text-xs text-brand-500">
+              Alternatif cetak thermal via aplikasi desktop (USB/Bluetooth)
+            </p>
+          </div>
+          {qzRunning && (
+            <span className="flex items-center gap-1 text-sm text-emerald-600 font-semibold">
+              <CheckCircle2 className="w-4 h-4" /> Aktif
+            </span>
+          )}
+        </div>
+
+        {qzError && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{qzError}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          {!qzRunning && (
+            <button onClick={handleQZConnect} disabled={qzLoading} className="btn-secondary">
+              {qzLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Cek QZ Tray...</> : "Deteksi QZ Tray"}
+            </button>
+          )}
+          {qzRunning && (
+            <button onClick={handleQZTestPrint} className="btn-primary">
+              <TestTube className="w-4 h-4" /> Test Print via QZ
+            </button>
+          )}
+        </div>
+
+        {qzPrinters.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-brand-700">Printer terdeteksi ({qzPrinters.length}):</p>
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {qzPrinters.map((p, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-brand-600 bg-brand-50 rounded-lg px-3 py-1.5">
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{p}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-brand-400">
+          Download & install QZ Tray dari{" "}
+          <a href="https://qz.io" target="_blank" rel="noopener noreferrer"
+             className="text-brand-600 underline">qz.io</a>.
+          Jalankan aplikasinya, terus klik "Deteksi QZ Tray" di sini.
+        </p>
       </div>
 
       {/* Auto Print */}

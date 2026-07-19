@@ -24,6 +24,8 @@ import {
 import Link from "next/link";
 import { clsx } from "clsx";
 import toast from "react-hot-toast";
+import { printReceipt, reconnectPrinter, isConnected } from "@/lib/bluetooth-printer";
+import type { ReceiptData } from "@/lib/bluetooth-printer";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
   { value: "tunai", label: "Tunai", icon: <Banknote className="w-5 h-5" /> },
@@ -147,6 +149,32 @@ export default function EditOrderPage() {
       toast.error(err.message || "Gagal menyimpan perubahan");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleBluetoothPrint() {
+    if (!order) return;
+    const paid = paymentStatus === "lunas" ? finalAmount : paymentStatus === "belum_bayar" ? 0 : paidAmount;
+    const change = paid > finalAmount ? paid - finalAmount : 0;
+    const data: ReceiptData = {
+      orderId: order.id,
+      createdAt: order.created_at,
+      customerName: customerName || order.customer_name || "",
+      paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus,
+      totalAmount: order.total_amount || 0,
+      discount,
+      finalAmount,
+      paidAmount: paid,
+      changeAmount: change,
+      items: items.map((i) => ({ name: i.book_title, qty: i.quantity, price: i.price_at_time, subtotal: i.subtotal })),
+    };
+    try {
+      if (!isConnected()) await reconnectPrinter();
+      await printReceipt(data);
+      toast.success("Struk terkirim ke printer");
+    } catch (e: any) {
+      toast.error(e.message || "Gagal cetak via Bluetooth");
     }
   }
 
@@ -441,6 +469,7 @@ export default function EditOrderPage() {
           paymentMethod={
             paymentMethod === "tunai" ? "Tunai" : paymentMethod === "qris" ? "QRIS" : "Transfer"
           }
+          onBluetoothPrint={handleBluetoothPrint}
           onClose={() => {
             setShowReceipt(false);
             router.push("/orders");
