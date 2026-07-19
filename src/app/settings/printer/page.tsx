@@ -1,6 +1,8 @@
 "use client";
+export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Printer,
   Bluetooth,
@@ -14,6 +16,7 @@ import {
   ArrowLeft,
   Settings2,
   RefreshCw,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -28,6 +31,10 @@ import {
   isConnected,
   getConnectedName,
   testPrint,
+  setLogCallback,
+  type PrinterLogEntry,
+  isWebBluetoothSupported,
+  getPlatformInfo,
 } from "@/lib/bluetooth-printer";
 
 type Status = "idle" | "connecting" | "connected" | "error";
@@ -40,8 +47,27 @@ export default function PrinterSettingsPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
   const [pairing, setPairing] = useState(false);
+  const [logs, setLogs] = useState<PrinterLogEntry[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
-  const refreshStatus = useCallback(async () => {
+  // Platform detection
+  const platform = getPlatformInfo();
+
+  // Log collector
+  useEffect(() => {
+    setLogCallback((entry) => {
+      setLogs((prev) => [...prev.slice(-99), entry]); // max 100 log entries
+    });
+    return () => setLogCallback(() => {});
+  }, []);
+
+  // Auto-scroll log
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  const refreshStatus = useCallback(() => {
     setConnected(isConnected());
     setDeviceName(getConnectedName());
     const p = getPairedPrinter();
@@ -50,7 +76,6 @@ export default function PrinterSettingsPage() {
 
   useEffect(() => {
     refreshStatus();
-    // Auto-reconnect coba
     if (getPairedPrinter() && !isConnected()) {
       setStatus("connecting");
       reconnectPrinter()
@@ -59,8 +84,7 @@ export default function PrinterSettingsPage() {
           setDeviceName(getConnectedName());
           setStatus("connected");
         })
-        .catch((e) => {
-          // Gagal reconnect wajar — user bisa tekan tombol
+        .catch(() => {
           setStatus("idle");
         });
     }
@@ -69,6 +93,7 @@ export default function PrinterSettingsPage() {
   async function handlePair() {
     setPairing(true);
     setError("");
+    setLogs([]);
     try {
       const p = await pairPrinter();
       setPaired(p);
@@ -77,6 +102,7 @@ export default function PrinterSettingsPage() {
       setStatus("connected");
     } catch (e: any) {
       setError(e.message || "Gagal pairing");
+      setStatus("error");
     } finally {
       setPairing(false);
     }
@@ -85,6 +111,7 @@ export default function PrinterSettingsPage() {
   async function handleReconnect() {
     setStatus("connecting");
     setError("");
+    setLogs([]);
     try {
       await reconnectPrinter();
       setConnected(true);
@@ -109,10 +136,12 @@ export default function PrinterSettingsPage() {
     await handleDisconnect();
     removePairedPrinter();
     setPaired(null);
+    setLogs([]);
   }
 
   async function handleTestPrint() {
     setError("");
+    setLogs([]);
     try {
       if (!isConnected()) {
         await reconnectPrinter();
@@ -142,6 +171,48 @@ export default function PrinterSettingsPage() {
         <h1 className="text-xl font-bold text-brand-900">Pengaturan Printer</h1>
       </div>
 
+      {/* Platform Info */}
+      {!isWebBluetoothSupported() && (
+        <div className="card p-4 border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-800 space-y-1">
+              <p className="font-bold">Web Bluetooth tidak didukung di browser ini.</p>
+              <p>Gunakan Chrome atau Edge versi terbaru di Windows/Android.</p>
+              <p className="text-xs text-amber-600 mt-2">
+                {platform.isMobile
+                  ? "Coba buka pake Chrome Android"
+                  : "Chrome/Edge di Windows — buka chrome://flags/#enable-experimental-web-platform-features kalo perlu"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Limitation Notice for Desktop */}
+      {isWebBluetoothSupported() && !platform.isMobile && (
+        <div className="card p-4 border-brand-200 bg-brand-50">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-brand-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-brand-700 space-y-1">
+              <p className="font-bold">Catatan Penting</p>
+              <p>
+                Web Bluetooth di komputer <strong>hanya support BLE</strong> (Bluetooth Low Energy).
+              </p>
+              <p className="text-xs text-brand-500 mt-1">
+                Printer thermal POS-58B / RPP02N umumnya pake Bluetooth Classic (SPP) yang{" "}
+                <strong>tidak bisa</strong> diakses via browser.
+              </p>
+              <p className="text-xs text-brand-500">
+                Alternatif: <strong>via USB</strong> (WebUSB/Serial) atau install{" "}
+                <a href="https://qztray.com" target="_blank" rel="noopener noreferrer"
+                   className="text-brand-700 underline font-semibold">QZ Tray</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Card */}
       <div className="card p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -169,7 +240,7 @@ export default function PrinterSettingsPage() {
             <div>
               <p className="font-bold text-emerald-800">{deviceName}</p>
               <p className="text-xs text-emerald-600">
-                Iware Mini Printer X-583 · Bluetooth
+                Bluetooth · 58mm thermal
               </p>
             </div>
           </div>
@@ -200,9 +271,9 @@ export default function PrinterSettingsPage() {
         )}
 
         {error && (
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 whitespace-pre-line">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            {error}
+            <span className="min-w-0">{error}</span>
           </div>
         )}
 
@@ -212,7 +283,7 @@ export default function PrinterSettingsPage() {
             <>
               <button
                 onClick={handlePair}
-                disabled={pairing}
+                disabled={pairing || !isWebBluetoothSupported()}
                 className="btn-primary"
               >
                 {pairing ? (
@@ -280,11 +351,15 @@ export default function PrinterSettingsPage() {
             </p>
             <p>
               <span className="font-semibold text-brand-700">Koneksi:</span>{" "}
-              Bluetooth
+              Bluetooth {platform.isDesktop ? "LE" : ""}
             </p>
             <p>
               <span className="font-semibold text-brand-700">Kertas:</span>{" "}
               58mm thermal
+            </p>
+            <p>
+              <span className="font-semibold text-brand-700">Platform:</span>{" "}
+              {platform.isMobile ? "📱 Mobile" : "💻 Desktop"}
             </p>
           </div>
           <button
@@ -293,6 +368,38 @@ export default function PrinterSettingsPage() {
           >
             <Trash2 className="w-4 h-4" /> Lupakan Printer
           </button>
+        </div>
+      )}
+
+      {/* Log Viewer */}
+      {logs.length > 0 && (
+        <div className="card p-5 space-y-3">
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="flex items-center justify-between w-full"
+          >
+            <h2 className="font-bold text-brand-800">
+              Log Bluetooth ({logs.length})
+            </h2>
+            <span className="text-xs text-brand-500">{showLogs ? "Sembunyikan" : "Lihat"}</span>
+          </button>
+          {showLogs && (
+            <div className="bg-gray-900 text-green-400 rounded-xl p-3 text-[11px] font-mono max-h-64 overflow-y-auto space-y-0.5">
+              {logs.map((log, i) => (
+                <div key={i} className={
+                  log.level === "error" ? "text-red-400" :
+                  log.level === "warn" ? "text-yellow-400" :
+                  log.level === "debug" ? "text-gray-500" :
+                  "text-green-400"
+                }>
+                  <span className="opacity-50">[{log.timestamp}]</span>{" "}
+                  <span className="font-semibold">{log.level.toUpperCase()}</span>{" "}
+                  {log.message}
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          )}
         </div>
       )}
     </div>

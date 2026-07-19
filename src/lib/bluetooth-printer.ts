@@ -1,13 +1,32 @@
 // Bluetooth Thermal Printer — Web Bluetooth + ESC/POS 58mm
-// Pair sekali, auto-reconnect, cetak struk kaya Receipt component
+// Pair sekali, auto-reconnect, cetak struk modern
+//
+// ─── LIMITASI YANG DIKETAHUI ───
+// Web Bluetooth API HANYA support BLE (Bluetooth Low Energy).
+// Printer thermal POS-58B/RPP02N umumnya pake Bluetooth Classic (SPP),
+// yang TIDAK BISA diakses via Web Bluetooth di browser desktop/mobile.
+//
+// Solusi alternatif kalo printer cuma support SPP:
+//   1. USB (WebUSB / Web Serial) — via kabel USB
+//   2. QZ Tray — aplikasi desktop bridge buat cetak dari browser
+//   3. Bridge lokal — aplikasi companion yg forward data dari WebSocket ke SPP
 
 const PRINTER_STORAGE_KEY = "pustakapos_printer";
 const AUTO_PRINT_KEY = "pustakapos_autoprint";
 
 export interface PairedPrinter {
-  id: string; // device.id
+  id: string;
   name: string;
 }
+
+export interface PrinterLogEntry {
+  level: "info" | "warn" | "error" | "debug";
+  message: string;
+  timestamp: string;
+  data?: any;
+}
+
+type LogCallback = (entry: PrinterLogEntry) => void;
 
 // ─── Persistence ───────────────────────────────
 
@@ -38,66 +57,228 @@ export function setAutoPrint(v: boolean) {
   localStorage.setItem(AUTO_PRINT_KEY, v ? "true" : "false");
 }
 
-// ─── Bluetooth ─────────────────────────────────
+// ─── Utility ───────────────────────────────────
 
 let _device: BluetoothDevice | null = null;
 let _characteristic: BluetoothRemoteGATTCharacteristic | null = null;
+let _logCallback: LogCallback | null = null;
 
-/** Cari service & characteristic writable di printer */
+export function setLogCallback(cb: LogCallback) {
+  _logCallback = cb;
+}
+
+function log(level: PrinterLogEntry["level"], message: string, data?: any) {
+  const entry: PrinterLogEntry = {
+    level,
+    message,
+    timestamp: new Date().toLocaleTimeString("id-ID"),
+    data,
+  };
+  console.log(`[Printer ${level.toUpperCase()}] ${message}`, data ?? "");
+  _logCallback?.(entry);
+}
+
+// ─── UUID Database ─────────────────────────────
+// Berbagai UUID yg umum dipake printer thermal BLE
+const PRINTER_SERVICE_UUIDS = [
+  // Standard ESC/POS BLE
+  "000018f0-0000-1000-8000-00805f9b34fb",
+  // Mopria / Star Micronics / Epson
+  "49535343-fe7d-4ae5-8fa9-9fafd205e455",
+  // Generic Printer (Star, Bixolon, etc)
+  "0000ff00-0000-1000-8000-00805f9b34fb",
+  // Serial Port Profile over BLE (beberapa printer thermal)
+  "00001101-0000-1000-8000-00805f9b34fb",
+  // SPW (Print Service for Wearables)
+  "0000180a-0000-1000-8000-00805f9b34fb",
+  // Vendor-specific (PeriPage, 58mm generic)
+  "ae22d12e-0000-1000-8000-00805f9b34fb",
+  // Thermal printer BLE (Xprinter, RPP02N)
+  "9ea5e000-0000-1000-8000-00805f9b34fb",
+];
+
+const PRINTER_CHAR_UUIDS = [
+  // Standard ESC/POS write
+  "00002af1-0000-1000-8000-00805f9b34fb",
+  // Mopria print characteristic
+  "49535343-8841-43f4-a8d4-ecbe34729bb3",
+  // Alternative write char
+  "00001102-0000-1000-8000-00805f9b34fb",
+  // Serial data
+  "0000ff02-0000-1000-8000-00805f9b34fb",
+  // Peripheral preferred connection
+  "0000ff01-0000-1000-8000-00805f9b34fb",
+  // PeriPage write char
+  "ae22d12f-0000-1000-8000-00805f9b34fb",
+  // Common write
+  "9ea5e001-0000-1000-8000-00805f9b34fb",
+];
+
+/** Cek apakah browser support Web Bluetooth */
+export function isWebBluetoothSupported(): boolean {
+  return typeof navigator !== "undefined" && "bluetooth" in navigator;
+}
+
+/** Deteksi platform */
+export function getPlatformInfo() {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+  const isChrome = /Chrome/i.test(ua) && !/Edg/i.test(ua);
+  const isEdge = /Edg/i.test(ua);
+  const isDesktop = !isMobile && (isChrome || isEdge);
+
+  return { isMobile, isDesktop, isChrome, isEdge, ua };
+}
+
+// ─── Cari Characteristic ───────────────────────
+
+/** Cari writable characteristic — coba UUID umum dulu, lalu scan semua service */
 async function findPrinterChar(
   server: BluetoothRemoteGATTServer
 ): Promise<BluetoothRemoteGATTCharacteristic | null> {
-  try {
-    const service = await server.getPrimaryService(
-      "000018f0-0000-1000-8000-00805f9b34fb"
-    );
-    const char = await service.getCharacteristic(
-      "00002af1-0000-1000-8000-00805f9b34fb"
-    );
-    return char;
-  } catch {
-    // Fallback: scan semua service cari yg writable
+  // Strategy 1: coba UUID service tertentu + UUID characteristic tertentu
+  for (const svcUuid of PRINTER_SERVICE_UUIDS) {
     try {
-      const services = await server.getPrimaryServices();
-      for (const svc of services) {
+      log("debug", `Coba service UUID: ${svcUuid}`);
+      const service = await server.getPrimaryService(svcUuid);
+      log("info", `Service ditemukan: ${service.uuid}`);
+
+      // Coba semua char UUID yg umum
+      for (const charUuid of PRINTER_CHAR_UUIDS) {
         try {
-          const chars = await svc.getCharacteristics();
-          for (const c of chars) {
-            if (c.properties.write || c.properties.writeWithoutResponse) {
-              return c;
-            }
+          const char = await service.getCharacteristic(charUuid);
+          const props = char.properties;
+          log("info", `Characteristic ${charUuid}: write=${props.write} writeWithoutResponse=${props.writeWithoutResponse} notify=${props.notify}`);
+
+          if (props.write || props.writeWithoutResponse) {
+            log("info", `Characteristic writable dipilih: ${charUuid} (write=${props.write}, woResp=${props.writeWithoutResponse})`);
+            return char;
           }
         } catch {
-          continue;
+          // Char UUID gak cocok, lanjut
+        }
+      }
+
+      // Kalo gak ketemu via UUID spesifik, scan semua char di service ini
+      const chars = await service.getCharacteristics();
+      for (const c of chars) {
+        if (c.properties.write || c.properties.writeWithoutResponse) {
+          log("info", `Characteristic writable ditemukan via scan: ${c.uuid} (write=${c.properties.write}, woResp=${c.properties.writeWithoutResponse})`);
+          return c;
         }
       }
     } catch {
-      return null;
+      // Service UUID gak cocok, lanjut
     }
-    return null;
   }
+
+  // Strategy 2: scan SEMUA service cari yg writable
+  log("warn", "Tidak ketemu via UUID spesifik. Scan semua service...");
+  try {
+    const services = await server.getPrimaryServices();
+    log("info", `Found ${services.length} services total`);
+    for (const svc of services) {
+      log("debug", `  Service: ${svc.uuid}`);
+      try {
+        const chars = await svc.getCharacteristics();
+        for (const c of chars) {
+          const props = `write=${c.properties.write} woResp=${c.properties.writeWithoutResponse} read=${c.properties.read} notify=${c.properties.notify}`;
+          log("debug", `    Char: ${c.uuid} [${props}]`);
+          if (c.properties.write || c.properties.writeWithoutResponse) {
+            log("info", `Characteristic writable ditemukan via scan: ${c.uuid}`);
+            return c;
+          }
+        }
+      } catch {
+        // skip service yg error
+      }
+    }
+  } catch (e) {
+    log("error", "Gagal scan services", e);
+  }
+
+  return null;
 }
+
+// ─── Pair / Reconnect / Disconnect ─────────────
 
 /** Pair printer baru — munculin popup Bluetooth OS */
 export async function pairPrinter(): Promise<PairedPrinter> {
-  if (typeof window === "undefined" || !navigator.bluetooth) {
-    throw new Error("Web Bluetooth tidak didukung di browser ini. Gunakan Chrome/Edge di laptop.");
+  log("info", "Pair printer baru...");
+
+  if (!isWebBluetoothSupported()) {
+    const platform = getPlatformInfo();
+    if (platform.isMobile) {
+      throw new Error(
+        "Web Bluetooth tidak didukung di browser ini. " +
+        "Gunakan Chrome Android versi terbaru."
+      );
+    }
+    throw new Error(
+      "Web Bluetooth tidak didukung di browser ini.\n\n" +
+      "Gunakan Chrome atau Edge versi terbaru di Windows/Mac.\n\n" +
+      "Catatan: Printer thermal POS-58B umumnya menggunakan Bluetooth Classic (SPP)\n" +
+      "yang TIDAK didukung Web Bluetooth. Solusi:\n" +
+      "  1. USB: sambung via kabel USB\n" +
+      "  2. QZ Tray: aplikasi bridge desktop\n" +
+      "  3. Ganti printer yg support BLE / WiFi"
+    );
   }
 
+  log("info", "Menampilkan dialog pairing Bluetooth...");
   const device = await navigator.bluetooth.requestDevice({
     acceptAllDevices: true,
-    optionalServices: [
-      "000018f0-0000-1000-8000-00805f9b34fb",
-      "49535343-fe7d-4ae5-8fa9-9fafd205e455",
-    ],
+    optionalServices: PRINTER_SERVICE_UUIDS,
   });
 
-  const server = await device.gatt!.connect();
-  const char = await findPrinterChar(server);
+  log("info", `Device dipilih: ${device.name || "Tanpa nama"} (${device.id})`);
+  log("debug", "Connecting to GATT server...");
 
+  const server = await device.gatt!.connect();
+  log("info", "GATT connected");
+
+  const char = await findPrinterChar(server);
   if (!char) {
     await device.gatt!.disconnect();
-    throw new Error("Printer tidak mendukung ESC/POS (tidak ada karakteristik write).");
+    log("error", "Tidak ada characteristic writable");
+
+    // Log detail semua service buat debugging
+    try {
+      const services = await server.getPrimaryServices();
+      for (const svc of services) {
+        log("debug", `Service: ${svc.uuid}`);
+        try {
+          const chars = await svc.getCharacteristics();
+          for (const c of chars) {
+            log("debug", `  Char ${c.uuid}: write=${c.properties.write} woResp=${c.properties.writeWithoutResponse} read=${c.properties.read} notify=${c.properties.notify}`);
+          }
+        } catch {}
+      }
+    } catch {}
+
+    const platform = getPlatformInfo();
+    if (!platform.isMobile) {
+      throw new Error(
+        "Printer tidak kompatibel dengan Web Bluetooth.\n\n" +
+        device.name
+          ? `Printer "${device.name}" terdeteksi tapi tidak memiliki service ESC/POS yang diperlukan.\n\n`
+          : "" +
+        "Kemungkinan printer ini menggunakan Bluetooth Classic (SPP) yang TIDAK didukung Web Bluetooth.\n\n" +
+        "Solusi:\n" +
+        "  1. USB: Hubungkan via kabel USB ke komputer\n" +
+        "  2. QZ Tray: Install aplikasi bridge desktop (https://qztray.com)\n" +
+        "  3. Ganti printer thermal dengan support BLE atau WiFi"
+      );
+    }
+
+    throw new Error(
+      "Printer tidak memiliki karakteristik tulis (write).\n" +
+      "Coba:\n" +
+      "  1. Restart printer\n" +
+      "  2. Hapus pairing lama di Settings Bluetooth HP\n" +
+      "  3. Pair ulang dari awal\n" +
+      "  4. Coba pake USB kalo ada"
+    );
   }
 
   _device = device;
@@ -109,52 +290,69 @@ export async function pairPrinter(): Promise<PairedPrinter> {
   };
   setPairedPrinter(paired);
 
-  // Listen disconnect untuk cleanup
   device.addEventListener("gattserverdisconnected", () => {
+    log("warn", `Printer disconnected: ${device.name}`);
     _device = null;
     _characteristic = null;
   });
 
+  log("info", `Pairing berhasil: ${paired.name}`);
   return paired;
 }
 
 /** Reconnect ke printer yg pernah dipairing — tanpa dialog */
 export async function reconnectPrinter(): Promise<void> {
-  if (typeof window === "undefined" || !navigator.bluetooth) {
-    throw new Error("Web Bluetooth tidak didukung.");
+  log("info", "Reconnect printer...");
+
+  if (!isWebBluetoothSupported()) {
+    throw new Error("Web Bluetooth tidak didukung browser ini.");
   }
 
-  // Kalo udah nyambung & masih aktif, skip
-  if (_device?.gatt?.connected) return;
+  if (_device?.gatt?.connected) {
+    log("debug", "Printer masih terhubung, skip reconnect");
+    return;
+  }
 
   const paired = getPairedPrinter();
   if (!paired) throw new Error("Belum ada printer terdaftar. Pairing dulu.");
 
+  log("info", `Mencari device: ${paired.name} (${paired.id})`);
   const devices = await navigator.bluetooth.getDevices();
   const device = devices.find((d) => d.id === paired.id);
+
   if (!device) {
     removePairedPrinter();
-    throw new Error(`Printer "${paired.name}" tidak ditemukan. Pairing ulang.`);
+    throw new Error(
+      `Printer "${paired.name}" tidak ditemukan. ` +
+      "Mungkin sudah di-unpair dari OS Bluetooth settings. Pairing ulang."
+    );
   }
 
+  log("info", `Device ditemukan, connecting...`);
   const server = await device.gatt!.connect();
+  log("info", "GATT connected");
+
   const char = await findPrinterChar(server);
   if (!char) {
     await device.gatt!.disconnect();
-    throw new Error("Printer tidak mendukung ESC/POS.");
+    throw new Error("Printer tidak mendukung ESC/POS (karakteristik write tidak ditemukan).");
   }
 
   _device = device;
   _characteristic = char;
 
   device.addEventListener("gattserverdisconnected", () => {
+    log("warn", `Printer disconnected: ${device.name}`);
     _device = null;
     _characteristic = null;
   });
+
+  log("info", "Reconnect berhasil");
 }
 
 /** Putuskan koneksi */
 export async function disconnectPrinter(): Promise<void> {
+  log("info", "Disconnect printer");
   if (_device?.gatt?.connected) {
     _device.gatt.disconnect();
   }
@@ -174,7 +372,7 @@ export function getConnectedName(): string | null {
 
 /** Daftar device yg pernah dipairing ke origin ini */
 export async function listPairedDevices(): Promise<PairedPrinter[]> {
-  if (typeof window === "undefined" || !navigator.bluetooth) return [];
+  if (!isWebBluetoothSupported()) return [];
   try {
     const devices = await navigator.bluetooth.getDevices();
     return devices.map((d) => ({
@@ -217,10 +415,10 @@ const NORMAL = cmd(0x1d, 0x21, 0x00);
 const CUT = cmd(0x1d, 0x56, 0x00);
 // Drawer kick
 const KICK = cmd(0x1b, 0x70, 0x00, 0x19, 0xfa);
+// Feed paper (n lines)
+function feed(n: number) { return cmd(0x1b, 0x64, n); }
 
-// ─00─ Max chars for 58mm paper (Font A = 12x24, 32 chars)
 const MAX_COL = 32;
-// ─
 const DIVIDER = "─".repeat(MAX_COL);
 const EQUALS = "=".repeat(MAX_COL);
 
@@ -259,13 +457,11 @@ function leftRight(left: string, right: string): Uint8Array {
   return textLine(line);
 }
 
-// ─── Format Rupiah ─────────────────────────────
-
 function fmt(n: number): string {
   return "Rp" + n.toLocaleString("id-ID");
 }
 
-// ─── Build Receipt — match Receipt component ───
+// ─── Build Receipt ─────────────────────────────
 
 export interface ReceiptData {
   orderId: string;
@@ -323,9 +519,8 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
   parts.push(textLine(DIVIDER));
 
   // ── Items ──
-  // Header
   parts.push(BOLD_ON);
-  parts.push(enc.encode("#  Produk" + " ".repeat(Math.max(0, 23)) + "Qty  Harga\n"));
+  parts.push(enc.encode("#  Produk                  Qty  Harga\n"));
   parts.push(BOLD_OFF);
   for (let i = 0; i < data.items.length; i++) {
     const item = data.items[i];
@@ -333,8 +528,6 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
     const name = item.name.length > 18 ? item.name.substring(0, 17) + "." : item.name;
     const qtyStr = item.qty.toString();
     const priceStr = item.price.toLocaleString("id-ID");
-    // Layout: [1] [nama...............] [qty] [harga]
-    // Total 32 chars
     const leftPart = no + " " + name;
     const rightPart = qtyStr + "  " + priceStr;
     const pad = MAX_COL - leftPart.length - rightPart.length;
@@ -397,7 +590,10 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
 // ─── Print ─────────────────────────────────────
 
 export async function printReceipt(data: ReceiptData): Promise<void> {
+  log("info", "Print receipt dimulai...");
+
   if (!_characteristic) {
+    log("info", "Characteristic kosong, reconnect dulu...");
     await reconnectPrinter();
   }
   if (!_characteristic) {
@@ -405,21 +601,56 @@ export async function printReceipt(data: ReceiptData): Promise<void> {
   }
 
   const bytes = buildReceiptBytes(data);
+  log("info", `Total data: ${bytes.length} bytes`);
 
-  // Kirim per chunk (BLE max 20 byte per write)
-  const CHUNK = 20;
+  // Cek characteristic properties
+  const props = _characteristic.properties;
+  const canWrite = props.write;
+  const canWriteNoResp = props.writeWithoutResponse;
+
+  log("info", `Properties: write=${canWrite}, writeWithoutResponse=${canWriteNoResp}`);
+
+  if (!canWrite && !canWriteNoResp) {
+    throw new Error("Characteristic tidak memiliki properti write.");
+  }
+
+  // Kirim per chunk + delay antar chunk (biar buffer printer ga overflow)
+  const CHUNK = 20; // BLE MTU max ~20 byte per write
+  const DELAY_MS = 50; // delay antar chunk biar printer ga kewalahan
+
+  let sentBytes = 0;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     const chunk = bytes.slice(i, i + CHUNK);
-    await _characteristic.writeValue(chunk);
+
+    try {
+      if (canWriteNoResp) {
+        // writeWithoutResponse lebih cepet (ga nunggu ack)
+        await _characteristic.writeValueWithoutResponse(chunk);
+      } else {
+        await _characteristic.writeValue(chunk);
+      }
+      sentBytes += chunk.byteLength;
+
+      // Delay antar chunk biar printer punya waktu proses
+      if (i + CHUNK < bytes.length) {
+        await new Promise((r) => setTimeout(r, DELAY_MS));
+      }
+    } catch (e: any) {
+      log("error", `Write gagal di byte ${i}: ${e.message}`);
+      throw new Error(`Gagal kirim data ke printer di byte ${i}: ${e.message}`);
+    }
   }
+
+  log("info", `Print berhasil: ${sentBytes}/${bytes.length} bytes terkirim`);
 }
 
 /** Test print — cetak struk test */
 export async function testPrint(): Promise<void> {
+  log("info", "Test print dimulai...");
   const testData: ReceiptData = {
-    orderId: "TEST1234",
+    orderId: "TEST" + Date.now().toString(36).toUpperCase().slice(-4),
     createdAt: new Date().toISOString(),
-    customerName: "Test",
+    customerName: "Test Cetak",
     paymentMethod: "tunai",
     paymentStatus: "lunas",
     totalAmount: 50000,
@@ -427,7 +658,10 @@ export async function testPrint(): Promise<void> {
     finalAmount: 50000,
     paidAmount: 50000,
     changeAmount: 0,
-    items: [{ name: "Produk Test", qty: 1, price: 50000, subtotal: 50000 }],
+    items: [
+      { name: "Produk Test #1", qty: 1, price: 25000, subtotal: 25000 },
+      { name: "Produk Test #2", qty: 2, price: 12500, subtotal: 25000 },
+    ],
   };
   await printReceipt(testData);
 }
